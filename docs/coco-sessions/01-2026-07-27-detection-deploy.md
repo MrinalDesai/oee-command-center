@@ -15,8 +15,15 @@ ANALYTICS.ANOMALY_EVENTS.
   re-ran with qualified names.
 - Approval granted session-scoped: "any statement in OEE_DB.ANALYTICS"
   (+ equivalent for OT/ERP reads).
-- RESULT: [fill in — proc return message, events inserted, whether the
-  median/MAD CTE needed restructuring, false-positive check on other assets]
+- RESULT: MAD CTE failed at runtime as predicted (window-in-aggregate);
+CoCo restructured into sequential CTEs. First proc version consumed the
+stream before processing — failed call ate a 4,080-row batch; proc
+rebuilt consume-last with PROCESSED_BATCH_LOG audit. Verdict run:
+AST-007 flagged BEARING_WEAR / HIGH — vib 11.02 vs 3.41 baseline
+(z=33.2, slope 1.67/day), temp 80.9°C (z=10.1) confirming the coupled
+signature. 11 other assets silent. 576 rows processed and receipted.
+days_to_threshold=0 noted (asset already past alarm line — demo staging
+item for G3).
 
 ## Learned
 - All SQL files authored fully qualified from now on; no session context
@@ -25,3 +32,6 @@ ANALYTICS.ANOMALY_EVENTS.
 
 ## Screenshot
 ![session](./img/01-detection-deploy.png)
+
+
+
