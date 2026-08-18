@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ForgePulse — Command Center</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0b0f14;--panel:#111821;--panel2:#0e141b;--line:#1e2a36;--ink:#e6edf3;
+    --mute:#7d8c9c;--dim:#4a5a6a;--signal:#3ddc84;--amber:#ffb454;--red:#ff5d5d;--blue:#5db4ff;--violet:#b48cff;
+    --mono:'JetBrains Mono',monospace;--display:'Fraunces',serif;}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--ink);font-family:var(--mono);font-size:13px;
+    background-image:radial-gradient(circle at 12% 8%,rgba(61,220,132,.05),transparent 42%);}
+  header{padding:22px 28px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:16px;flex-wrap:wrap}
+  header h1{font-family:var(--display);font-size:26px;font-weight:900;letter-spacing:-.02em}
+  header h1 em{color:var(--signal);font-style:italic}
+  header .sub{color:var(--mute);font-size:12px}
+  header .status{margin-left:auto;font-size:11px;color:var(--mute)}
+  header .status b{color:var(--signal)}
+  .layout{display:grid;grid-template-columns:300px 1fr;min-height:calc(100vh - 71px)}
+  .left{border-right:1px solid var(--line);padding:20px;overflow-y:auto;max-height:calc(100vh - 71px)}
+  .right{padding:24px 28px;overflow-y:auto;max-height:calc(100vh - 71px)}
+  .eyebrow{font-size:10px;letter-spacing:.3em;text-transform:uppercase;color:var(--signal);margin:22px 0 10px}
+  .eyebrow:first-child{margin-top:0}
+  h3{font-family:var(--display);font-size:16px;font-weight:600;margin:0 0 12px}
+  button{font-family:var(--mono);cursor:pointer;border:1px solid var(--line);background:var(--panel);
+    color:var(--ink);border-radius:8px;padding:8px 11px;font-size:12px;transition:.2s}
+  button:hover{border-color:var(--signal);color:var(--signal)}
+  button.cur{border-color:var(--signal);color:var(--signal);background:rgba(61,220,132,.08)}
+  button:focus-visible{outline:2px solid var(--signal);outline-offset:1px}
+
+  .motor{display:flex;justify-content:space-between;align-items:center;width:100%;
+    text-align:left;margin-bottom:7px;padding:9px 11px}
+  .motor .hs{font-size:10px;color:var(--dim)}
+  .motor.crit{border-color:var(--red);box-shadow:0 0 12px rgba(255,93,93,.25);animation:pulse 2s ease-in-out infinite}
+  .motor.crit .hs{color:var(--red)}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.85}}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:14px}
+  .tabs{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+  .badge{font-size:10px;letter-spacing:.15em;color:var(--signal);border:1px solid var(--signal);
+    border-radius:12px;padding:3px 10px;margin-left:auto;box-shadow:0 0 10px rgba(61,220,132,.3)}
+  .wavebox{position:relative}
+  .anno{position:absolute;top:10px;background:var(--red);color:#fff;font-size:11px;font-weight:700;
+    padding:5px 10px;border-radius:5px;box-shadow:0 0 16px rgba(255,93,93,.5);display:none}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+  .stat{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+  .stat .k{font-size:10px;letter-spacing:.2em;color:var(--mute);text-transform:uppercase}
+  .stat .v{font-size:20px;font-weight:700;margin-top:4px}
+
+  /* pipeline flow */
+  .flow{display:flex;align-items:center;gap:0;margin:6px 0}
+  .node{border:2px solid var(--line);border-radius:8px;padding:10px 16px;font-size:11.5px;
+    background:var(--panel2);color:var(--dim);white-space:nowrap}
+  .node.done{border-color:var(--signal);color:var(--ink);box-shadow:0 0 14px rgba(61,220,132,.35)}
+  .node.now{border-color:var(--red);color:var(--ink);box-shadow:0 0 14px rgba(255,93,93,.45);animation:pulse 2s infinite}
+  .edge{width:56px;height:2px;background:var(--line);position:relative}
+  .edge.lit{background:repeating-linear-gradient(90deg,var(--signal) 0 6px,transparent 6px 12px);
+    animation:flow 1s linear infinite;box-shadow:0 0 8px rgba(61,220,132,.4)}
+  @keyframes flow{to{background-position:-12px 0}}
+  .tick{color:var(--signal);font-size:11px;margin-left:6px}
+  .alert-row{display:flex;gap:12px;align-items:center;border-bottom:1px solid var(--line);padding:8px 0;font-size:12px}
+  .sev{font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px}
+  .sev.HIGH{background:rgba(255,93,93,.15);color:var(--red);border:1px solid var(--red)}
+  .sev.MEDIUM{background:rgba(255,180,84,.12);color:var(--amber);border:1px solid var(--amber)}
+  @media (prefers-reduced-motion:reduce){.motor.crit,.node.now,.edge.lit{animation:none}}
+  @media (max-width:900px){.layout{grid-template-columns:1fr}.left{max-height:none;border-right:none;border-bottom:1px solid var(--line)}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Forge<em>Pulse</em></h1>
+  <span class="sub">predictive maintenance command center</span>
+  <span class="status">SYSTEM <b>ONLINE</b> · <span id="clock"></span></span>
+</header>
+
+<div class="layout">
+  <aside class="left">
+    <div class="eyebrow">Plant Assets</div>
+    <div id="motors"></div>
+  </aside>
+
+  <main class="right">
+    <div class="eyebrow">Live Sensor Feed</div>
+    <div class="card">
+      <div class="tabs" id="sensortabs"></div>
+      <div class="wavebox">
+        <span class="badge" style="position:absolute;right:8px;top:-38px">REAL-TIME</span>
+        <div class="anno" id="anno">⚠ ABNORMAL PATTERN DETECTED</div>
+        <canvas id="wave" width="1100" height="300" style="width:100%"
+          role="img" aria-label="Live sensor waveform"></canvas>
+      </div>
+      <div class="stats" id="stats"></div>
+    </div>
+
+    <div class="eyebrow">Fault Pipeline</div>
+    <div class="card" id="pipes"></div>
+
+    <div class="eyebrow">Active Alerts</div>
+    <div class="card" id="alerts"></div>
+  </main>
+</div>
+
+<script>
+const SENSORS=[["VIBRATION_RMS","Vibration (mm/s)"],["BEARING_TEMP","Temp (°C)"],["RPM","RPM"],["CURRENT_DRAW","Current (A)"]];
+const STAGES=["DETECT","DIAGNOSE","ACT","WORK ORDER"];
+let motor="AST-007", sensor="VIBRATION_RMS", assets=[];
+
+const $=id=>document.getElementById(id);
+setInterval(()=>{$("clock").textContent=new Date().toLocaleTimeString()},1000);
+
+async function j(u){const r=await fetch(u);if(!r.ok)throw u;return r.json()}
+
+function renderMotors(){
+  $("motors").innerHTML=assets.map(a=>
+    `<button class="motor ${a.status==='critical'?'crit':''} ${a.asset_id===motor?'cur':''}"
+      onclick="motor='${a.asset_id}';renderMotors();draw()">
+      <span>${a.asset_id}<br><span style="color:var(--mute);font-size:10px">${a.name}</span></span>
+      <span class="hs">${Math.round(a.health*100)}%</span></button>`).join("");
+}
+function renderTabs(){
+  $("sensortabs").innerHTML=SENSORS.map(([k,l])=>
+    `<button class="${k===sensor?'cur':''}" onclick="sensor='${k}';renderTabs();draw()">${l}</button>`).join("");
+}
+
+async function draw(){
+  try{
+    const d=await j(`/api/live/${motor}?sensor=${sensor}`);
+    const c=$("wave"),x=c.getContext("2d"),W=c.width,H=c.height;
+    x.clearRect(0,0,W,H);
+    x.strokeStyle="#1e2a36";x.lineWidth=.5;
+    for(let i=1;i<10;i++){x.beginPath();x.moveTo(0,i*H/10);x.lineTo(W,i*H/10);x.stroke()}
+    const v=d.points,lo=Math.min(...v),hi=Math.max(...v),sp=(hi-lo)||1;
+    const Y=n=>H-((n-lo)/sp)*(H-24)-12, X=i=>i/(v.length-1)*W;
+    const a=d.anomaly[0];
+    if(a){x.fillStyle="rgba(255,93,93,.12)";x.fillRect(X(a.start),0,X(a.end)-X(a.start),H);
+      x.strokeStyle="var(--red)";x.setLineDash([5,5]);x.strokeStyle="#ff5d5d";
+      x.strokeRect(X(a.start),0,X(a.end)-X(a.start),H);x.setLineDash([]);
+      const an=$("anno");an.style.display="block";an.style.left=Math.min(X(a.start),W*0.55)/W*100+"%";
+    } else $("anno").style.display="none";
+    x.lineWidth=1.6;x.beginPath();
+    v.forEach((n,i)=>{i?x.lineTo(X(i),Y(n)):x.moveTo(X(i),Y(n))});
+    x.strokeStyle="#5db4ff";x.shadowColor="#5db4ff";x.shadowBlur=4;x.stroke();x.shadowBlur=0;
+    if(a){x.save();x.beginPath();x.rect(X(a.start),0,X(a.end)-X(a.start),H);x.clip();
+      x.beginPath();v.forEach((n,i)=>{i?x.lineTo(X(i),Y(n)):x.moveTo(X(i),Y(n))});
+      x.strokeStyle="#ff5d5d";x.lineWidth=2;x.shadowColor="#ff5d5d";x.shadowBlur=8;x.stroke();x.restore();x.shadowBlur=0}
+    $("stats").innerHTML=[["RMS",d.stats.rms],["PEAK",d.stats.peak],["AVG",d.stats.avg],["BASELINE",d.baseline.toFixed(2)]]
+      .map(([k,val])=>`<div class="stat"><div class="k">${k}</div><div class="v">${val}</div></div>`).join("");
+  }catch(e){}
+}
+
+function stageIdx(s){return s==="NEW"?0:s==="INVESTIGATING"?1:s==="ACTIONED"?3:1}
+async function renderPipes(alerts){
+  $("pipes").innerHTML=alerts.length?alerts.map(al=>{
+    const idx=stageIdx(al.status);
+    return `<div style="margin-bottom:10px">
+      <div style="font-size:11px;color:var(--mute);margin-bottom:6px">
+        <b style="color:var(--ink)">${al.asset_id}</b> · ${al.probable_mode} ·
+        <span class="sev ${al.severity}">${al.severity}</span></div>
+      <div class="flow">${STAGES.map((st,i)=>
+        `${i?`<div class="edge ${i<=idx?'lit':''}"></div>`:''}
+         <div class="node ${i<idx?'done':i===idx?(al.status==='ACTIONED'?'done':'now'):''}">${st}
+         ${i<idx||(i===idx&&al.status==='ACTIONED')?'<span class="tick">✓</span>':''}</div>`).join("")}
+      </div></div>`;
+  }).join(""):'<span style="color:var(--mute)">No active faults — plant nominal.</span>';
+}
+async function renderAlerts(alerts){
+  $("alerts").innerHTML=alerts.length?alerts.map(al=>
+    `<div class="alert-row"><span style="color:var(--red)">●</span>
+      <span>${new Date(al.detected_ts).toLocaleTimeString()}</span>
+      <b>${al.asset_id}</b><span>${al.probable_mode.replaceAll("_"," ").toLowerCase()} detected</span>
+      <span class="sev ${al.severity}" style="margin-left:auto">${al.severity}</span></div>`).join("")
+    :'<span style="color:var(--mute)">No alerts.</span>';
+}
+
+async function boot(){
+  assets=await j("/api/assets");renderMotors();renderTabs();draw();
+  const alerts=await j("/api/alerts");renderPipes(alerts);renderAlerts(alerts);
+  setInterval(draw,2000);
+  setInterval(async()=>{assets=await j("/api/assets");renderMotors();
+    const al=await j("/api/alerts");renderPipes(al);renderAlerts(al)},15000);
+}
+boot();
+</script>
+</body>
+</html>

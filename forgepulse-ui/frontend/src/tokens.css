@@ -1,0 +1,68 @@
+/* tokens.css — ForgePulse design system (BRD §8.1, exact) */
+:root {
+  --bg: #0b0f14;
+  --panel: #111823;
+  --border: #1e2a38;
+  --text: #e6edf3;
+  --text-2: #8b98a5;
+  --healthy: #2ea043;
+  --watch: #d29922;
+  --critical: #f85149;
+  --sensor-fault: #8957e5;
+  --accent: #388bfd;
+  --radius: 8px;
+  --gap: 8px;
+}
+
+* { box-sizing: border-box; margin: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.mono { font-family: "JetBrains Mono", monospace; }
+
+.label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-2);
+}
+
+.kpi-number { font-family: "JetBrains Mono", monospace; font-size: 20px; font-weight: 600; }
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: calc(var(--gap) * 2);
+}
+
+.status-healthy { color: var(--healthy); }
+.status-watch { color: var(--watch); }
+.status-critical { color: var(--critical); }
+.status-sensor-fault { color: var(--sensor-fault); }
+
+/* the app's single animation (BRD: 2s ease, opacity 0.85<->1.0) */
+@keyframes pulse-critical {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.85; }
+}
+.card-critical { animation: pulse-critical 2s ease-in-out infinite; border-color: var(--critical); }
+@media (prefers-reduced-motion: reduce) {
+  .card-critical { animation: none; }
+}
+
+a { color: var(--accent); text-decoration: none; }
+button {
+  font: inherit; color: var(--text); background: var(--panel);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 6px 12px; cursor: pointer;
+}
+button:hover { border-color: var(--accent); }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
