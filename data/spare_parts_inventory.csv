@@ -1,0 +1,11 @@
+part_no,part_name,qty_on_hand,lead_time_days,unit_cost
+BRG-6312-2RS,Deep groove ball bearing 6312 2RS,4,7,3200.0
+BRG-6316-C3,Deep groove ball bearing 6316 C3,2,14,5400.0
+BRG-NU210,Cylindrical roller bearing NU210,3,10,4100.0
+SEAL-TC-50x72,Shaft seal TC 50x72x8,8,5,240.0
+GRS-EP2,Lithium EP2 grease 1kg,12,3,650.0
+FLT-COND-JT160,Condenser filter JT160,2,21,1850.0
+COIL-CLEAN-KIT,Coil chemical cleaning kit,5,7,900.0
+TX-VIB-100mV,Accelerometer 100mV/g M12,1,30,7800.0
+CBL-M12-5M,Sensor cable M12 5m shielded,6,10,450.0
+BELT-SPB-2500,V-belt SPB 2500,10,5,380.0

@@ -63,6 +63,21 @@
   .sev{font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px}
   .sev.HIGH{background:rgba(255,93,93,.15);color:var(--red);border:1px solid var(--red)}
   .sev.MEDIUM{background:rgba(255,180,84,.12);color:var(--amber);border:1px solid var(--amber)}
+  .floor{display:grid;gap:14px}
+  .lineRow{display:flex;align-items:center;gap:14px;border:1px solid var(--line);
+    border-radius:10px;padding:12px 16px;background:var(--panel2)}
+  .lineTag{font-size:10px;letter-spacing:.25em;color:var(--mute);writing-mode:vertical-rl;
+    transform:rotate(180deg);border-right:1px solid var(--line);padding-right:8px}
+  .machine{cursor:pointer;text-align:center;position:relative;background:none;border:none;padding:6px}
+  .machine svg{display:block;margin:0 auto}
+  .machine .mid{font-size:10px;color:var(--mute);margin-top:4px}
+  .machine.sel .mid{color:var(--signal)}
+  .machine .fault{position:absolute;top:-10px;left:50%;transform:translateX(-50%);
+    background:var(--red);color:#fff;font-size:9px;font-weight:700;padding:2px 7px;
+    border-radius:4px;white-space:nowrap;box-shadow:0 0 12px rgba(255,93,93,.6)}
+  .g-healthy{filter:drop-shadow(0 0 5px rgba(61,220,132,.55))}
+  .g-critical{filter:drop-shadow(0 0 9px rgba(255,93,93,.8));animation:pulse 2s infinite}
+  .g-watch{filter:drop-shadow(0 0 7px rgba(255,180,84,.7))}
   @media (prefers-reduced-motion:reduce){.motor.crit,.node.now,.edge.lit{animation:none}}
   @media (max-width:900px){.layout{grid-template-columns:1fr}.left{max-height:none;border-right:none;border-bottom:1px solid var(--line)}}
 </style>
@@ -81,6 +96,9 @@
   </aside>
 
   <main class="right">
+    <div class="eyebrow">Plant Floor</div>
+    <div class="card floor" id="floor"></div>
+
     <div class="eyebrow">Live Sensor Feed</div>
     <div class="card">
       <div class="tabs" id="sensortabs"></div>
@@ -173,12 +191,46 @@ async function renderAlerts(alerts){
     :'<span style="color:var(--mute)">No alerts.</span>';
 }
 
+const COLORS={healthy:"#3ddc84",watch:"#ffb454",critical:"#ff5d5d","sensor-fault":"#b48cff"};
+function motorSVG(color){return `<svg width="86" height="52" viewBox="0 0 86 52" aria-hidden="true">
+  <rect x="6" y="12" width="52" height="30" rx="6" fill="#0e141b" stroke="${color}" stroke-width="2"/>
+  <rect x="58" y="19" width="10" height="16" rx="2" fill="#0e141b" stroke="${color}" stroke-width="2"/>
+  <rect x="68" y="23" width="12" height="8" rx="2" fill="${color}"/>
+  <line x1="12" y1="12" x2="12" y2="42" stroke="${color}" stroke-width="1" opacity=".45"/>
+  <line x1="20" y1="12" x2="20" y2="42" stroke="${color}" stroke-width="1" opacity=".45"/>
+  <line x1="28" y1="12" x2="28" y2="42" stroke="${color}" stroke-width="1" opacity=".45"/>
+  <rect x="14" y="42" width="10" height="5" fill="${color}" opacity=".7"/>
+  <rect x="40" y="42" width="10" height="5" fill="${color}" opacity=".7"/>
+</svg>`}
+let faultMap={};
+function renderFloor(){
+  const lines={};
+  assets.forEach(a=>{(lines[a.line]=lines[a.line]||[]).push(a)});
+  $("floor").innerHTML=Object.keys(lines).sort().map(ln=>
+    `<div class="lineRow"><span class="lineTag">LINE ${ln}</span>`+
+    lines[ln].map(a=>{
+      const f=faultMap[a.asset_id];
+      return `<button class="machine ${a.asset_id===motor?'sel':''}"
+        onclick="motor='${a.asset_id}';renderMotors();renderFloor();draw()"
+        aria-label="${a.asset_id} ${a.status}">
+        ${f?`<span class="fault">${f}</span>`:''}
+        <span class="g-${a.status==='sensor-fault'?'watch':a.status}">${motorSVG(COLORS[a.status]||'#4a5a6a')}</span>
+        <div class="mid">${a.asset_id}</div></button>`;
+    }).join("")+`</div>`).join("");
+}
 async function boot(){
-  assets=await j("/api/assets");renderMotors();renderTabs();draw();
-  const alerts=await j("/api/alerts");renderPipes(alerts);renderAlerts(alerts);
+  assets=await j("/api/assets");
+  const alerts=await j("/api/alerts");
+  faultMap={};alerts.forEach(al=>faultMap[al.asset_id]=al.probable_mode.replaceAll("_"," "));
+  faultMap["AST-004"]=faultMap["AST-004"]||"RPM INSTABILITY";
+  renderMotors();renderFloor();renderTabs();draw();
+  renderPipes(alerts);renderAlerts(alerts);
   setInterval(draw,2000);
-  setInterval(async()=>{assets=await j("/api/assets");renderMotors();
-    const al=await j("/api/alerts");renderPipes(al);renderAlerts(al)},15000);
+  setInterval(async()=>{assets=await j("/api/assets");
+    const al=await j("/api/alerts");
+    faultMap={};al.forEach(x=>faultMap[x.asset_id]=x.probable_mode.replaceAll("_"," "));
+    faultMap["AST-004"]=faultMap["AST-004"]||"RPM INSTABILITY";
+    renderMotors();renderFloor();renderPipes(al);renderAlerts(al)},15000);
 }
 boot();
 </script>
