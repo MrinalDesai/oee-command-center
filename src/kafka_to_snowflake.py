@@ -4,9 +4,14 @@ kafka_to_snowflake.py — Consume 'telemetry' topic, batch-insert into OT.RAW_TE
 Spike version: plain connector inserts (proves the pipe). Production upgrade path:
 Snowpipe Streaming via the Kafka connector (see docs/BRD.md, out-of-scope note).
 
+Consumer uses manual partition assignment (no consumer group): kafka-python's
+group-coordinator path hits a selector bug on Windows (ValueError: Invalid
+file descriptor: -1). assign+seek_to_end keeps the same read-from-now behavior
+with none of the coordinator machinery.
+
 Credentials via environment variables — never in code:
-    $env:SNOWFLAKE_ACCOUNT  = "<BMB76514 account identifier, e.g. KFUUTSN-BMB76514>"
-    $env:SNOWFLAKE_USER     = "MRINALSNOW88"
+    $env:SNOWFLAKE_ACCOUNT  = "<account identifier, e.g. DMXGSFN-EYB14592>"
+    $env:SNOWFLAKE_USER     = "<username>"
     $env:SNOWFLAKE_PASSWORD = "<password>"
 
 Usage:  python src/kafka_to_snowflake.py
@@ -20,7 +25,7 @@ import sys
 import time
 
 import snowflake.connector
-from kafka import KafkaConsumer
+from kafka import KafkaConsumer, TopicPartition
 
 BOOTSTRAP = "localhost:9092"
 TOPIC = "telemetry"
@@ -52,12 +57,12 @@ def main() -> None:
     conn = connect()
     cur = conn.cursor()
     consumer = KafkaConsumer(
-        TOPIC,
         bootstrap_servers=BOOTSTRAP,
         value_deserializer=lambda b: json.loads(b.decode()),
-        auto_offset_reset="latest",
-        group_id="oee-sink",
     )
+    tp = TopicPartition(TOPIC, 0)
+    consumer.assign([tp])
+    consumer.seek_to_end(tp)
     print(f"Consuming {TOPIC} -> OT.RAW_TELEMETRY (batch {BATCH_SIZE} / {FLUSH_SECONDS}s)")
 
     buffer: list[dict] = []

@@ -168,7 +168,7 @@ BEGIN
       SELECT 1 FROM ANALYTICS.ANOMALY_EVENTS e
       WHERE e.asset_id = vd.asset_id
         AND e.probable_mode = vd.probable_mode
-        AND e.status IN ('NEW','INVESTIGATING')
+        AND e.status IN ('NEW','INVESTIGATING','ACTIONED')
     );
   inserted := SQLROWCOUNT;
 
