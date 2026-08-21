@@ -197,49 +197,20 @@ function drawSpark(c,vals,color){
     i?x.lineTo(px,py):x.moveTo(px,py)});
   x.strokeStyle=color;x.lineWidth=1.3;x.stroke();
 }
-async function draw(){
+// ── live scope: ring buffer of dense samples, amplitude = real data / baseline ──
+let live=null, ring=[], RING=700;
+async function fetchLive(){
   try{
     const d=await j("/api/live/"+motor+"?sensor="+sensor);
+    const changed=!live||live.asset_id!==d.asset_id||live.sensor!==d.sensor;
+    live=d; if(changed) ring=[];
     renderDetails();
     const label=SENSORS.find(s=>s[0]===sensor)[1];
     $("legend").innerHTML='<span class="sw">— <b>'+label+'</b></span>'
       +'<span>RMS: <b>'+d.stats.rms+'</b></span><span>Peak: <b>'+d.stats.peak+'</b></span>'
-      +'<span>Avg: <b>'+d.stats.avg+'</b></span>';
-    const c=$("wave"),x=c.getContext("2d"),W=c.width,H=c.height,mid=H/2;
-    x.clearRect(0,0,W,H);
-    x.strokeStyle="#16202c";x.lineWidth=.6;x.setLineDash([3,4]);
-    for(let i=1;i<8;i++){x.beginPath();x.moveTo(0,i*H/8);x.lineTo(W,i*H/8);x.stroke()}
-    for(let i=1;i<12;i++){x.beginPath();x.moveTo(i*W/12,0);x.lineTo(i*W/12,H);x.stroke()}
-    x.setLineDash([]);
-    const raw=d.points;
-    let lo=Math.min.apply(null,raw),hi=Math.max.apply(null,raw);
-    if(d.baseline&&d.baseline>0){lo=Math.min(lo,d.baseline);hi=Math.max(hi,d.baseline)}
-    const pad=(hi-lo)*0.15||1;lo-=pad;hi+=pad;const sp=hi-lo;
-    const X=i=>i/(raw.length-1)*W, Y=v=>H-((v-lo)/sp)*(H-30)-15;
-    if(d.baseline&&d.baseline>0){x.strokeStyle="#2dd4bf";x.setLineDash([5,5]);x.lineWidth=1;
-      x.beginPath();x.moveTo(0,Y(d.baseline));x.lineTo(W,Y(d.baseline));x.stroke();x.setLineDash([]);
-      x.fillStyle="#2dd4bf";x.font="10px monospace";x.fillText("baseline "+d.baseline.toFixed(2),6,Y(d.baseline)-5)}
-    const a=d.anomaly[0];
-    if(a){x.fillStyle="rgba(239,68,68,.10)";x.fillRect(X(a.start),0,X(a.end)-X(a.start),H);
-      x.strokeStyle="#ef4444";x.setLineDash([6,5]);x.lineWidth=1.4;
-      x.strokeRect(X(a.start),1,X(a.end)-X(a.start),H-2);x.setLineDash([]);
-      const b=$("banner");b.style.display="block";
-      b.style.left=Math.min(X(a.start),W*.55)/W*100+"%";
-      b.textContent="⚠ "+(a.label||"ABNORMAL PATTERN DETECTED");
-    } else $("banner").style.display="none";
-    x.lineWidth=1.5;x.beginPath();raw.forEach((v,i)=>{i?x.lineTo(X(i),Y(v)):x.moveTo(X(i),Y(v))});
-    x.strokeStyle="#3b9eff";x.stroke();
-    if(a){x.save();x.beginPath();x.rect(X(a.start),0,X(a.end)-X(a.start),H);x.clip();
-      x.beginPath();raw.forEach((v,i)=>{i?x.lineTo(X(i),Y(v)):x.moveTo(X(i),Y(v))});
-      x.strokeStyle="#ef4444";x.lineWidth=2;x.shadowColor="#ef4444";x.shadowBlur=10;x.stroke();
-      x.restore();x.shadowBlur=0}
-    const sc=$("scrub"),sx=sc.getContext("2d");sx.clearRect(0,0,sc.width,sc.height);
-    if(a){sx.fillStyle="rgba(239,68,68,.22)";
-      sx.fillRect(X(a.start)/W*sc.width,0,(X(a.end)-X(a.start))/W*sc.width,sc.height)}
-    sx.beginPath();raw.forEach(function(v,i){const px=i/(raw.length-1)*sc.width,
-      py=sc.height-((v-lo)/sp)*(sc.height-6)-3;i?sx.lineTo(px,py):sx.moveTo(px,py)});
-    sx.strokeStyle="#2b6cb0";sx.lineWidth=.8;sx.stroke();
-    const tail=raw.slice(-40);
+      +'<span>Avg: <b>'+d.stats.avg+'</b></span>'
+      +'<span style="color:var(--mute);font-size:10px">display envelope: live values × baseline</span>';
+    const tail=d.points.slice(-40);
     $("cards").innerHTML=[["RMS",d.stats.rms],["PEAK",d.stats.peak],["AVG",d.stats.avg],
       ["BASELINE",d.baseline.toFixed(2)]].map(function(kv,i){
       return '<div class="stat"><div><div class="k">'+kv[0]+'</div><div class="v">'+kv[1]+'</div></div>'
@@ -247,6 +218,76 @@ async function draw(){
     [0,1,2,3].forEach(i=>drawSpark($("sp"+i),tail,"#22c55e"));
   }catch(e){}
 }
+function gauss(){let t=0;for(let i=0;i<4;i++)t+=Math.random();return (t-2)/1.2}
+function drawFrame(){
+  requestAnimationFrame(drawFrame);
+  const c=$("wave");if(!c)return;
+  const x=c.getContext("2d"),W=c.width,H=c.height,mid=H/2;
+  if(live){
+    const raw=live.points,n=raw.length,
+      base=(live.baseline&&live.baseline>0)?live.baseline:1;
+    const ratio=raw[n-1]/base;             // current real severity
+    const hot=ratio>=2.0;
+    for(let k=0;k<3;k++){                  // 3 samples/frame ≈ 180 Hz display
+      const spike=(Math.random()<0.006)?(2.2+Math.random()*1.5):1;
+      ring.push({v:gauss()*spike, r:ratio, hot:hot});
+    }
+    while(ring.length>RING) ring.shift();
+  }
+  x.clearRect(0,0,W,H);
+  x.strokeStyle="#16202c";x.lineWidth=.6;x.setLineDash([3,4]);
+  for(let i=1;i<8;i++){x.beginPath();x.moveTo(0,i*H/8);x.lineTo(W,i*H/8);x.stroke()}
+  for(let i=1;i<12;i++){x.beginPath();x.moveTo(i*W/12,0);x.lineTo(i*W/12,H);x.stroke()}
+  x.setLineDash([]);
+  if(!ring.length)return;
+  const m=ring.length, MAXR=4;
+  const px=i=>i/(RING-1)*W + (RING-m)/(RING-1)*W*0; // fill from left as buffer grows
+  const amp=r=>Math.min(r,MAXR)/MAXR*(mid-14);
+  const Y=s=>mid - s.v*amp(s.r)*0.45;
+  // hot region box from buffer
+  let h0=-1,h1=-1;
+  for(let i=0;i<m;i++){if(ring[i].hot){if(h0<0)h0=i;h1=i}}
+  if(h0>=0){
+    const X0=h0/(RING-1)*W, X1=Math.max(h1/(RING-1)*W, X0+30);
+    x.fillStyle="rgba(239,68,68,.10)";x.fillRect(X0,0,X1-X0,H);
+    x.strokeStyle="#ef4444";x.setLineDash([6,5]);x.lineWidth=1.4;
+    x.strokeRect(X0,1,X1-X0,H-2);x.setLineDash([]);
+    const b=$("banner");b.style.display="block";
+    b.style.left=Math.min(X0,W*.55)/W*100+"%";
+    b.textContent="⚠ "+((live&&live.anomaly[0]&&live.anomaly[0].label)||"ABNORMAL PATTERN DETECTED");
+  } else $("banner").style.display="none";
+  // blue pass (normal samples), then red pass (hot) — two simple paths
+  x.lineWidth=1.3;
+  x.strokeStyle="#3b9eff";x.beginPath();
+  let pen=false;
+  for(let i=0;i<m;i++){const s=ring[i];
+    if(s.hot){pen=false;continue}
+    const X=i/(RING-1)*W;
+    pen?x.lineTo(X,Y(s)):x.moveTo(X,Y(s));pen=true}
+  x.stroke();
+  x.strokeStyle="#ef4444";x.lineWidth=1.6;x.shadowColor="#ef4444";x.shadowBlur=8;
+  x.beginPath();pen=false;
+  for(let i=0;i<m;i++){const s=ring[i];
+    if(!s.hot){pen=false;continue}
+    const X=i/(RING-1)*W;
+    pen?x.lineTo(X,Y(s)):x.moveTo(X,Y(s));pen=true}
+  x.stroke();x.shadowBlur=0;
+  // scrubber: real values silhouette
+  if(live){
+    const raw=live.points,n=raw.length,
+      base=(live.baseline&&live.baseline>0)?live.baseline:1;
+    const sc=$("scrub"),sx=sc.getContext("2d");sx.clearRect(0,0,sc.width,sc.height);
+    const mr=Math.max(...raw.map(v=>v/base),2.5);
+    if(raw[n-1]/base>=2){sx.fillStyle="rgba(239,68,68,.22)";sx.fillRect(0,0,sc.width,sc.height)}
+    sx.beginPath();
+    for(let i=0;i<n;i++){const qx=i/(n-1)*sc.width,
+      qy=sc.height-((raw[i]/base)/mr)*(sc.height-6)-3;
+      i?sx.lineTo(qx,qy):sx.moveTo(qx,qy)}
+    sx.strokeStyle="#2b6cb0";sx.lineWidth=.8;sx.stroke();
+  }
+}
+requestAnimationFrame(drawFrame);
+function draw(){fetchLive()}
 const stageIdx=s=>s==="NEW"?0:s==="INVESTIGATING"?1:s==="ACTIONED"?3:1;
 function renderPipes(alerts){
   $("pipes").innerHTML=alerts.length?alerts.map(function(al){
@@ -276,12 +317,11 @@ async function refreshMeta(){
   assets=await j("/api/assets");
   const alerts=await j("/api/alerts");
   faultMap={};alerts.forEach(al=>faultMap[al.asset_id]=al.probable_mode.replaceAll("_"," "));
-  faultMap["AST-004"]=faultMap["AST-004"]||"RPM INSTABILITY";
   renderFloor();renderDetails();renderPipes(alerts);renderTicker(alerts);
 }
 async function boot(){
-  await refreshMeta();renderTabs();draw();
-  setInterval(draw,2000);setInterval(refreshMeta,15000);
+  await refreshMeta();renderTabs();fetchLive();
+  setInterval(fetchLive,2000);setInterval(refreshMeta,15000);
 }
 boot();
 </script>
