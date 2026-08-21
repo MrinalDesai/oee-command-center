@@ -40,20 +40,25 @@ def simulate(cls: str, rng: random.Random):
     vb = rng.uniform(*BASE["vib"]); tb = rng.uniform(*BASE["temp"])
     rb = rng.choice([850, 1450, 2950]); ab = rng.uniform(*BASE["amp"])
     vib, temp, rpm = [], [], []
-    ramp_start = rng.uniform(0.2, 0.5) * N       # where degradation begins
-    sev = rng.uniform(0.6, 1.8)                  # episode severity multiplier
+    # degradation can begin inside the window OR long before it (saturated case)
+    ramp_start = rng.uniform(-0.8, 0.5) * N      # negative = already-degraded window
+    ph1, ph2 = rng.uniform(0, 6.28), rng.uniform(0, 6.28)
+    rpm_swing = rng.uniform(0.04, 0.08)          # intraday speed variation (real plants)
+    sev = rng.uniform(0.25, 1.1)                 # calibrated to the live generator's fault intensity
     stuck_val = None
     for i in range(N):
         shift = 1 + 0.02 * math.sin(2 * math.pi * i / (24 * 12))
         v = vb * shift + rng.gauss(0, vb * 0.05)
         t = tb * shift + rng.gauss(0, 0.8)
-        r = rb * (1 + rng.gauss(0, 0.004))
+        r = rb * (1 + rpm_swing * math.sin(2 * math.pi * i / 72 + ph1)
+                  + 0.02 * math.sin(2 * math.pi * i / 288 + ph2)) \
+               * (1 + rng.gauss(0, 0.004))       # production-schedule speed swings, like the real data
         if cls == "FP-01" and i > ramp_start:
-            g = (i - ramp_start) / (N - ramp_start)
+            g = min(1.2, (i - ramp_start) / max(N - ramp_start, N * 0.5))
             v += vb * sev * (math.exp(2.2 * g) - 1) * 0.55
             t += 9 * sev * max(0.0, g - 0.15) / 0.85       # lagged follow
         elif cls == "FP-02" and i > ramp_start:
-            g = (i - ramp_start) / (N - ramp_start)
+            g = min(1.2, (i - ramp_start) / max(N - ramp_start, N * 0.5))
             t += 11 * sev * g                              # temp only
         elif cls == "FP-03" and i > ramp_start:
             if stuck_val is None:
@@ -66,6 +71,18 @@ def simulate(cls: str, rng: random.Random):
                 r -= rb * 0.05 * sev * rng.uniform(0.6, 1)  # slip dips
         vib.append(v); temp.append(t); rpm.append(r)
     return vib, temp, rpm, vb, tb, rb
+
+
+
+def _roll_med_residual(series, k=12):
+    if len(series) < k + 2:
+        return [0.0] * len(series)
+    import statistics as _st
+    out = []
+    for i in range(len(series)):
+        lo = max(0, i - k)
+        out.append(series[i] - _st.median(series[lo:i + 1]))
+    return out
 
 
 def slope_per_day(series, cadence_min=CADENCE_MIN):
@@ -96,8 +113,8 @@ def features(vib, temp, rpm, vb, tb, rb) -> dict:
         "vib_ratio": st.mean(recent_v) / vb,
         "temp_z": (st.mean(recent_t) - tb) / 1.0,
         "temp_slope": slope_per_day(temp[-864:]),
-        "rpm_cv": st.pstdev(recent_r) / st.mean(recent_r),
-        "rpm_osc": max(recent_r) - min(recent_r),
+        "rpm_cv": st.pstdev(_roll_med_residual(recent_r)) / st.mean(recent_r),
+        "rpm_osc": (lambda res: max(res) - min(res))(_roll_med_residual(recent_r)[-72:]),
         "vib_temp_lagcorr": lag_corr(vib[-864:], temp[-864:]),
     }
 

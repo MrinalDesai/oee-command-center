@@ -230,6 +230,34 @@ def get_reports(asset_id: str):
             for r in rows]
 
 
+@app.get("/api/diagnosis/{asset_id}")
+def get_diagnosis(asset_id: str):
+    rows = q("""
+        SELECT f.finding_id, f.rca_summary, f.recommended_action,
+               e2.fault_pattern_id, e2.severity, e2.probable_mode,
+               en.predicted_pattern, en.confidence, en.probabilities,
+               en.top_factors, en.similar_reports, en.enriched_by
+        FROM OEE_DB.ANALYTICS.FINDINGS f
+        JOIN OEE_DB.ANALYTICS.ANOMALY_EVENTS e2 ON e2.event_id=f.event_id
+        LEFT JOIN OEE_DB.ANALYTICS.FINDING_ENRICHMENT en
+          ON en.finding_id=f.finding_id
+        WHERE f.asset_id=%s ORDER BY f.finding_id DESC LIMIT 1""", (asset_id,))
+    if not rows:
+        raise HTTPException(404, "no diagnosis")
+    import json as _j
+    r = rows[0]
+    return {"finding_id": r["FINDING_ID"], "rca_summary": r["RCA_SUMMARY"],
+            "recommended_action": r["RECOMMENDED_ACTION"],
+            "fault_pattern_id": r["FAULT_PATTERN_ID"], "severity": r["SEVERITY"],
+            "probable_mode": r["PROBABLE_MODE"],
+            "predicted_pattern": r["PREDICTED_PATTERN"],
+            "confidence": float(r["CONFIDENCE"]) if r["CONFIDENCE"] is not None else None,
+            "probabilities": _j.loads(r["PROBABILITIES"]) if r["PROBABILITIES"] else {},
+            "top_factors": _j.loads(r["TOP_FACTORS"]) if r["TOP_FACTORS"] else [],
+            "similar_reports": _j.loads(r["SIMILAR_REPORTS"]) if r["SIMILAR_REPORTS"] else [],
+            "enriched_by": r["ENRICHED_BY"]}
+
+
 @app.get("/api/live/{asset_id}")
 def get_live(asset_id: str, sensor: str = "VIBRATION_RMS", seconds: int = 600):
     minutes = max(1, seconds // 60)

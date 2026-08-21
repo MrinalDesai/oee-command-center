@@ -24,7 +24,9 @@ from sklearn.preprocessing import LabelEncoder
 from xgboost import XGBClassifier
 
 FEATURES = ["vib_z", "vib_slope", "vib_std_recent", "vib_ratio",
-            "temp_z", "temp_slope", "rpm_cv", "rpm_osc", "vib_temp_lagcorr"]
+            "temp_z", "temp_slope", "vib_temp_lagcorr"]
+# rpm_cv / rpm_osc excluded: live RPM carries production-schedule regime shifts the
+# training sim cannot faithfully reproduce; documented in README (train/serve skew).
 
 
 def main() -> None:
@@ -34,6 +36,8 @@ def main() -> None:
     args = ap.parse_args()
 
     df = pd.read_csv(args.data)
+    print("=== per-class feature means (training) ===")
+    print(df.groupby("label")[FEATURES].mean().round(2))
     le = LabelEncoder()
     y = le.fit_transform(df["label"])
     X = df[FEATURES]
@@ -66,6 +70,12 @@ def main() -> None:
             print(f"  {f:>18}: {v:.4f}")
     except Exception as e:
         print(f"(shap skipped: {e})")
+
+    import json, os as _os
+    _os.makedirs("data", exist_ok=True)
+    model.save_model("data/fault_classifier.json")
+    json.dump(list(le.classes_), open("data/fault_classes.json","w"))
+    print("model saved -> data/fault_classifier.json")
 
     if args.register:
         missing = [k for k in ("SNOWFLAKE_ACCOUNT", "SNOWFLAKE_USER",

@@ -130,7 +130,9 @@
     </div>
   </aside>
   <main class="main">
-    <div class="feedhead"><h2>LIVE SENSOR FEED</h2><span class="pill">REAL-TIME</span></div>
+    <div class="feedhead"><h2 class="sechead">AI DIAGNOSIS</h2>
+<div id="diag" style="margin:0 0 26px"><span style="color:var(--mute)">Select a machine with an active fault.</span></div>
+<h2>LIVE SENSOR FEED</h2><span class="pill">REAL-TIME</span></div>
     <div class="tabsrow" id="sensortabs"></div>
     <div class="legend" id="legend"></div>
     <div class="chartcard">
@@ -287,7 +289,60 @@ function drawFrame(){
   }
 }
 requestAnimationFrame(drawFrame);
-function draw(){fetchLive()}
+function draw(){fetchLive();renderDiag()}
+
+async function renderDiag(){
+  const el=$("diag");
+  try{
+    const d=await j("/api/diagnosis/"+motor);
+    const conf=d.confidence!=null?Math.round(d.confidence*100):null;
+    const confColor=conf==null?"#4a5a6a":conf>=80?"#22c55e":conf>=50?"#f59e0b":"#ef4444";
+    let h='<div style="display:grid;grid-template-columns:280px 1fr;gap:18px">';
+    h+='<div class="card" style="padding:14px">'
+      +'<div class="k" style="margin-bottom:6px">MODEL VERDICT · '+motor+'</div>'
+      +'<div style="font-size:20px;font-weight:700" class="mono">'+(d.predicted_pattern||d.fault_pattern_id||"—")+'</div>'
+      +'<div style="font-size:12px;color:var(--mute);margin-bottom:10px">'+(d.probable_mode||"").replaceAll("_"," ")+'</div>';
+    if(conf!=null){
+      h+='<div class="k">CONFIDENCE</div>'
+        +'<div style="display:flex;align-items:center;gap:10px;margin:4px 0 10px">'
+        +'<div style="flex:1;height:8px;background:#101826;border-radius:4px;overflow:hidden">'
+        +'<div style="width:'+conf+'%;height:100%;background:'+confColor+'"></div></div>'
+        +'<b class="mono" style="color:'+confColor+'">'+conf+'%</b></div>';
+      const probs=Object.entries(d.probabilities||{}).sort((a,b)=>b[1]-a[1]).slice(0,3);
+      h+='<div style="font-size:11px;color:var(--mute)" class="mono">'
+        +probs.map(p=>p[0]+" "+Math.round(p[1]*100)+"%").join(" · ")+'</div>';
+    }
+    if((d.top_factors||[]).length){
+      h+='<div class="k" style="margin-top:12px">WHY (top factors)</div>';
+      d.top_factors.forEach(f=>{
+        h+='<div style="display:flex;justify-content:space-between;font-size:12px;margin-top:4px" class="mono">'
+          +'<span>'+f.feature+'</span><span style="color:#3b9eff">'+f.value+'</span></div>';});
+    }
+    h+='</div>';
+    h+='<div>';
+    h+='<div class="card" style="padding:14px;margin-bottom:12px">'
+      +'<div class="k" style="margin-bottom:6px">ROOT-CAUSE FINDING</div>'
+      +'<div style="font-size:13px;line-height:1.55;white-space:pre-wrap">'+(d.rca_summary||"").slice(0,700)+'</div>'
+      +(d.recommended_action?'<div style="margin-top:8px;font-size:13px"><b style="color:#22c55e">RECOMMENDED:</b> '+d.recommended_action+'</div>':'')
+      +'</div>';
+    if((d.similar_reports||[]).length){
+      h+='<div class="k" style="margin-bottom:6px">SIMILAR PAST REPAIRS (from scanned reports)</div>'
+        +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">';
+      d.similar_reports.forEach(r=>{
+        h+='<div class="card" style="padding:10px">'
+          +'<div class="mono" style="font-size:12px"><b>'+r.report_id+'</b> · '+r.pattern+' · '+r.asset
+          +' <span style="color:#3b9eff">'+Math.round(r.score*100)+'%</span></div>'
+          +'<div style="font-size:12px;color:var(--ink);margin:6px 0">'+r.remedy+'</div>'
+          +'<div style="font-size:11px;color:var(--mute)" class="mono">parts: '+(r.parts||"—")
+          +' · downtime '+(r.downtime_h||"?")+'h</div></div>';});
+      h+='</div>';
+    }
+    h+='<div style="font-size:10px;color:var(--mute);margin-top:8px" class="mono">'+(d.enriched_by||"")+'</div>';
+    h+='</div></div>';
+    el.innerHTML=h;
+  }catch(e){el.innerHTML='<span style="color:var(--mute)">No diagnosis for '+motor+' — machine nominal.</span>'}
+}
+
 const stageIdx=s=>s==="NEW"?0:s==="INVESTIGATING"?1:s==="ACTIONED"?3:1;
 function renderPipes(alerts){
   $("pipes").innerHTML=alerts.length?alerts.map(function(al){
