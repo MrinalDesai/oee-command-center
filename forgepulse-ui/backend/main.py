@@ -177,17 +177,47 @@ def get_oee():
             FROM OEE_DB.ERP.PRODUCTION_SCHEDULE
             WHERE shift_date > DATEADD(day,-7,CURRENT_DATE())
             GROUP BY line_id ORDER BY line_id""")
+        perf = 0.94
         out = []
         for r in rows:
-            avail = float(r["A"]) / max(float(r["P"]), 1)
+            avail = min(float(r["A"]) / max(float(r["P"]), 1) / perf, 1.0)
             qual = float(r["G"]) / max(float(r["A"]), 1)
-            perf = 0.94
-            out.append({"line": r["LINE_ID"],
-                        "availability": round(min(avail / perf, 1.0), 3),
+            out.append({"line": r["LINE_ID"], "availability": round(avail, 3),
                         "performance": perf, "quality": round(qual, 3),
-                        "oee": round(avail * qual, 3)})
+                        "oee": round(avail * perf * qual, 3), "impact": None})
+        # impact bridge: for each line with an open event, avoided-downtime math
+        evs = q("""
+            SELECT e.asset_id, e.probable_mode, am.line_id
+            FROM OEE_DB.ANALYTICS.ANOMALY_EVENTS e
+            JOIN OEE_DB.ERP.ASSET_MASTER am ON am.asset_id=e.asset_id
+            WHERE e.status IN ('NEW','INVESTIGATING','ACTIONED')""")
+        PLANNED_H = 4.0
+        WEEK_H = 7 * 24.0
+        for ev in evs:
+            try:
+                h = q("""SELECT AVG(downtime_hours) d, COUNT(*) n
+                         FROM OEE_DB.ERP.WORK_ORDER_HISTORY
+                         WHERE failure_mode = %s""", (ev["PROBABLE_MODE"],))
+                unplanned = float(h[0]["D"] or 10.0)
+                n_hist = int(h[0]["N"] or 0)
+            except Exception:
+                unplanned, n_hist = 10.0, 0
+            avoided = max(unplanned - PLANNED_H, 0.0)
+            for o in out:
+                if o["line"] == ev["LINE_ID"]:
+                    d_av = avoided / WEEK_H
+                    new_av = min(o["availability"] + d_av, 1.0)
+                    o["impact"] = {
+                        "asset": ev["ASSET_ID"],
+                        "mode": ev["PROBABLE_MODE"],
+                        "avg_unplanned_h": round(unplanned, 1),
+                        "history_n": n_hist,
+                        "planned_h": PLANNED_H,
+                        "avoided_h": round(avoided, 1),
+                        "projected_availability": round(new_av, 3),
+                        "projected_oee": round(new_av * o["performance"] * o["quality"], 3)}
         return out
-    return cached("oee", 300, _f)
+    return cached("oee", 120, _f)
 
 
 @app.get("/api/workorders")

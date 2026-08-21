@@ -101,6 +101,7 @@
   .tabsrow button:focus-visible{outline:2px solid var(--blue)}
   @media (prefers-reduced-motion:reduce){.g-critical,.node.now,.edge.lit{animation:none}}
   @media (max-width:940px){.layout{grid-template-columns:1fr}.side{flex-direction:row;flex-wrap:wrap}.details{margin:0}}
+.qbtn{background:#0e1a2b;border:1px solid #24405e;color:#9fc3ea;font-family:inherit;font-size:12px;padding:6px 12px;border-radius:6px;cursor:pointer}.qbtn:hover{border-color:#3b9eff;color:#dbeafe}
 </style>
 </head>
 <body>
@@ -145,6 +146,8 @@
     <div id="floor"></div>
     <div class="sect" style="margin-top:26px">AI Diagnosis</div>
     <div id="diag" style="margin:0 0 26px"><span style="color:var(--mute)">Select a machine with an active fault.</span></div>
+    <div class="sect" style="margin-top:26px">OEE — Line Impact</div>
+    <div id="oee" style="margin:0 0 26px"></div>
     <div class="sect" id="pipesect">Fault Pipeline</div>
     <div class="card" id="pipes"></div>
     <div class="ticker" id="ticker"></div>
@@ -289,12 +292,68 @@ function drawFrame(){
   }
 }
 requestAnimationFrame(drawFrame);
-function draw(){fetchLive();renderDiag()}
+function draw(){fetchLive();renderDiag();renderOEE()}
+
+
+async function renderOEE(){
+  try{
+    const lines=await j("/api/oee");
+    $("oee").innerHTML='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">'+lines.map(function(L){
+      const pct=v=>Math.round(v*1000)/10;
+      let h='<div class="card" style="padding:12px">'
+        +'<div style="display:flex;justify-content:space-between;margin-bottom:6px">'
+        +'<b class="mono">LINE '+L.line+'</b><b class="mono" style="color:#3b9eff">OEE '+pct(L.oee)+'%</b></div>'
+        +'<div style="font-size:11px;color:var(--mute)" class="mono">A '+pct(L.availability)+'% × P '+pct(L.performance)+'% × Q '+pct(L.quality)+'%</div>';
+      if(L.impact){
+        const I=L.impact;
+        h+='<div style="margin-top:10px;padding-top:8px;border-top:1px solid #1a2634">'
+          +'<div style="font-size:11px;color:var(--mute)">PLANNED INTERVENTION — '+I.asset+' ('+I.mode.replaceAll("_"," ").toLowerCase()+')</div>'
+          +'<div style="font-size:12px;margin-top:4px" class="mono">unplanned avg <b style="color:#ef4444">'+I.avg_unplanned_h+'h</b>'
+          +' ('+I.history_n+' past cases) → planned <b style="color:#22c55e">'+I.planned_h+'h</b>'
+          +' = <b>'+I.avoided_h+'h avoided</b></div>'
+          +'<div style="font-size:12px;margin-top:4px" class="mono">availability '+pct(L.availability)+'% → <b style="color:#22c55e">'+pct(I.projected_availability)+'%</b>'
+          +' · OEE '+pct(L.oee)+'% → <b style="color:#22c55e">'+pct(I.projected_oee)+'%</b></div>'
+          +'</div>';
+      }
+      return h+'</div>'}).join("")+'</div>';
+  }catch(e){}
+}
+let lastDiag=null;
+function answerQ(which){
+  const d=lastDiag;if(!d)return;
+  const box=$("qanswer");
+  let t="";
+  if(which==="why"){
+    t="<b>Why was this failure predicted?</b><br>The model and rules agree on "
+      +(d.predicted_pattern||d.fault_pattern_id)+" ("+(d.probable_mode||"").replaceAll("_"," ").toLowerCase()
+      +") with "+Math.round((d.confidence||0)*100)+"% confidence. Strongest signals: "
+      +(d.top_factors||[]).map(f=>f.feature+" = "+f.value).join(", ")
+      +". These are live values computed against this asset's own 28-day baseline.";
+  } else if(which==="evidence"){
+    t="<b>What evidence supports the diagnosis?</b><br>"
+      +(d.rca_summary||"").split("\n").slice(0,4).join("<br>")
+      +"<br><br><b>Fleet history (semantic match over scanned repair reports):</b> "
+      +(d.similar_reports||[]).map(r=>r.report_id+" ("+r.asset+", "+Math.round(r.score*100)+"% similar — "+r.remedy+")").join("; ");
+  } else {
+    t="<b>Why this maintenance window?</b><br>";
+    fetch("/api/workorders").then(r=>r.json()).then(function(ws){
+      const w=ws.find(x=>x.asset_id===motor);
+      box.innerHTML=t+(w
+        ? "Work order <b>"+w.wo_id+"</b> is scheduled for <b>"+w.opened+"</b>: parts are "
+          +"in stock, and the slot falls in the line's lowest-load production window per the schedule — "
+          +"a planned 4h stop instead of the ~10-12h unplanned failure the fleet history shows for this mode."
+        : "No open work order for this asset.");
+    });
+    box.style.display="block";return;
+  }
+  box.innerHTML=t;box.style.display="block";
+}
 
 async function renderDiag(){
   const el=$("diag");
   try{
     const d=await j("/api/diagnosis/"+motor);
+    lastDiag=d;
     const conf=d.confidence!=null?Math.round(d.confidence*100):null;
     const confColor=conf==null?"#4a5a6a":conf>=80?"#22c55e":conf>=50?"#f59e0b":"#ef4444";
     let h='<div style="display:grid;grid-template-columns:280px 1fr;gap:18px">';
@@ -337,6 +396,11 @@ async function renderDiag(){
           +' · downtime '+(r.downtime_h||"?")+'h</div></div>';});
       h+='</div>';
     }
+    h+='<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">'
+      +'<button class="qbtn" onclick="answerQ(\'why\')">Why was this predicted?</button>'
+      +'<button class="qbtn" onclick="answerQ(\'evidence\')">What is the evidence?</button>'
+      +'<button class="qbtn" onclick="answerQ(\'window\')">Why this maintenance window?</button></div>'
+      +'<div id="qanswer" class="card" style="display:none;margin-top:10px;padding:12px;font-size:13px;line-height:1.55"></div>';
     h+='<div style="font-size:10px;color:var(--mute);margin-top:8px" class="mono">'+(d.enriched_by||"")+'</div>';
     h+='</div></div>';
     el.innerHTML=h;

@@ -60,6 +60,7 @@ try {
   }
   if ($Worker) {
     $procs += Start-Bg "llm_worker" "src\llm_worker.py"
+    $procs += Start-Bg "enrich_worker" "src\enrich_worker.py --loop"
   }
   if ($Ui) {
     $uvicorn = Join-Path $root ".venv\Scripts\uvicorn.exe"
