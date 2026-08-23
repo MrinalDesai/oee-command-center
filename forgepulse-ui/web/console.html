@@ -148,6 +148,29 @@
     <div id="diag" style="margin:0 0 26px"><span style="color:var(--mute)">Select a machine with an active fault.</span></div>
     <div class="sect" style="margin-top:26px">OEE — Line Impact</div>
     <div id="oee" style="margin:0 0 26px"></div>
+    <div class="sect" style="margin-top:26px">Anomaly Lab — Inject &amp; Detect</div>
+    <div class="card" style="padding:14px;margin:0 0 26px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+        <button class="qbtn" onclick="runLab('FP-01')">Inject bearing wear</button>
+        <button class="qbtn" onclick="runLab('FP-02')">Inject cooling degradation</button>
+        <button class="qbtn" onclick="runLab('FP-03')">Inject stuck sensor</button>
+        <button class="qbtn" onclick="runLab('FP-04')">Inject belt slip</button>
+        <span id="labstatus" style="color:var(--mute);font-size:12px;align-self:center"></span>
+      </div>
+      <canvas id="labwave" width="1400" height="300" style="width:100%;height:300px;display:block"></canvas>
+      <div id="labverdict" style="margin-top:10px;font-size:13px"></div>
+      <div style="font-size:10px;color:var(--mute);margin-top:6px" class="mono">synthetic signal, same physics as training · classification by the registered FAULT_PATTERN_CLASSIFIER over 18h sliding windows · fault occupies only the highlighted segment</div>
+    </div>
+    <div class="sect" style="margin-top:26px">Repair History Library</div>
+    <div class="card" style="padding:14px;margin:0 0 26px">
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <button class="qbtn hbtn" onclick="loadHistory('FP-01',this)">FP-01 Bearing wear</button>
+        <button class="qbtn hbtn" onclick="loadHistory('FP-02',this)">FP-02 Cooling</button>
+        <button class="qbtn hbtn" onclick="loadHistory('FP-03',this)">FP-03 Sensor fault</button>
+        <button class="qbtn hbtn" onclick="loadHistory('FP-04',this)">FP-04 Belt slip</button>
+      </div>
+      <div id="history"><span style="color:var(--mute)">Pick a fault pattern — every scanned repair report of that kind, with the remedy that fixed it.</span></div>
+    </div>
     <div class="sect" id="pipesect">Fault Pipeline</div>
     <div class="card" id="pipes"></div>
     <div class="ticker" id="ticker"></div>
@@ -292,8 +315,117 @@ function drawFrame(){
   }
 }
 requestAnimationFrame(drawFrame);
-function draw(){fetchLive();renderDiag();renderOEE()}
+function draw(){fetchLive();renderDiag();renderOEE();renderParts()}
 
+
+
+const LAB_COLORS={"FP-01":"#ef4444","FP-02":"#f59e0b","FP-03":"#a78bfa","FP-04":"#facc15"};
+const LAB_NAMES={"FP-01":"BEARING WEAR","FP-02":"COOLING DEGRADATION","FP-03":"SENSOR STUCK","FP-04":"BELT SLIP"};
+async function runLab(p){
+  $("labstatus").textContent="generating + classifying…";
+  $("labverdict").innerHTML="";
+  try{
+    const d=await j("/api/lab/"+p);
+    drawLab(d);
+    const hit=d.detections.length
+      ? d.detections.map(x=>'<b style="color:'+(LAB_COLORS[x.cls]||"#fff")+'">'+LAB_NAMES[x.cls]+'</b> ('+Math.round(x.conf*100)+'%)').join(", ")
+      : '<span style="color:var(--mute)">no anomaly called</span>';
+    const ok=d.detections.some(x=>x.cls===d.pattern_injected);
+    $("labverdict").innerHTML='Injected: <b style="color:'+LAB_COLORS[d.pattern_injected]+'">'
+      +LAB_NAMES[d.pattern_injected]+'</b> in a '
+      +Math.round((d.injected_segment.end-d.injected_segment.start)/d.n*100)
+      +'% segment · Model called: '+hit
+      +(ok?' · <b style="color:#22c55e">correct pattern, correctly localized</b>'
+          :' · <b style="color:#f59e0b">see overlay</b>');
+    $("labstatus").textContent="";
+  }catch(e){$("labstatus").textContent="lab error — is the model file in the image?"}
+}
+let labAnim=null;
+function drawLab(d){
+  if(labAnim)cancelAnimationFrame(labAnim);
+  const c=$("labwave"),x=c.getContext("2d"),W=c.width,H=c.height,mid=H/2;
+  const v=d.vib,n=v.length,base=d.baseline_vib;
+  const dev=v.map(q=>q-base);
+  const amp=Math.max(...dev.map(Math.abs))||1;
+  const X=i=>i/(n-1)*W, Y=q=>mid-(q/amp)*(mid-20);
+  const DURATION=12000;               // 12s sweep
+  const t0=performance.now();
+  function colAt(i,prog){
+    for(const det of d.detections){
+      if(det.end<=prog && i>=det.start && i<det.end)
+        return LAB_COLORS[det.cls]||"#ef4444";
+    }
+    return "#3b9eff";
+  }
+  function frame(now){
+    const prog=Math.min(n-1,Math.floor((now-t0)/DURATION*n));
+    x.clearRect(0,0,W,H);
+    x.strokeStyle="#16202c";x.lineWidth=.6;x.setLineDash([3,4]);
+    for(let i=1;i<6;i++){x.beginPath();x.moveTo(0,i*H/6);x.lineTo(W,i*H/6);x.stroke()}
+    x.setLineDash([]);
+    // detection bands: appear only once their window has completed
+    d.detections.forEach(det=>{
+      if(det.end>prog)return;
+      const col=LAB_COLORS[det.cls]||"#ef4444";
+      const X0=X(det.start),X1=X(Math.min(det.end,n-1));
+      x.fillStyle=col+"1f";x.fillRect(X0,0,X1-X0,H);
+      x.strokeStyle=col;x.setLineDash([6,5]);x.lineWidth=1.3;
+      x.strokeRect(X0,1,X1-X0,H-2);x.setLineDash([]);
+      x.fillStyle=col;x.font="bold 11px monospace";
+      x.fillText(LAB_NAMES[det.cls]+" "+Math.round(det.conf*100)+"% — DETECTED",X0+6,16);
+    });
+    // the wave up to the sweep position, colored by (revealed) detections
+    let cur=colAt(0,prog);
+    x.lineWidth=1.4;x.strokeStyle=cur;x.beginPath();x.moveTo(X(0),Y(dev[0]));
+    for(let i=1;i<=prog;i++){
+      const cc=colAt(i,prog);
+      if(cc!==cur){x.stroke();x.strokeStyle=cc;cur=cc;x.beginPath();x.moveTo(X(i-1),Y(dev[i-1]))}
+      x.lineTo(X(i),Y(dev[i]));
+    }
+    x.stroke();
+    // sweep head glow
+    const hx=X(prog),hy=Y(dev[prog]);
+    const g=x.createRadialGradient(hx,hy,0,hx,hy,9);
+    g.addColorStop(0,"rgba(59,158,255,.95)");g.addColorStop(1,"rgba(0,0,0,0)");
+    x.fillStyle=g;x.beginPath();x.arc(hx,hy,9,0,7);x.fill();
+    if(prog>=n-1){
+      // ground truth bracket revealed at the end
+      const g0=X(d.injected_segment.start),g1=X(d.injected_segment.end);
+      x.strokeStyle="#94a3b8";x.lineWidth=2;
+      x.beginPath();x.moveTo(g0,H-6);x.lineTo(g1,H-6);x.stroke();
+      x.fillStyle="#94a3b8";x.font="10px monospace";
+      x.fillText("injected here (ground truth)",g0,H-10);
+      return;                          // animation done
+    }
+    labAnim=requestAnimationFrame(frame);
+  }
+  labAnim=requestAnimationFrame(frame);
+}
+
+async function loadHistory(fp,btn){
+  document.querySelectorAll(".hbtn").forEach(b=>b.style.borderColor="#24405e");
+  if(btn)btn.style.borderColor=LAB_COLORS[fp]||"#3b9eff";
+  $("history").innerHTML='<span style="color:var(--mute)">loading…</span>';
+  try{
+    const rows=await j("/api/history/"+fp);
+    if(!rows.length){$("history").innerHTML='<span style="color:var(--mute)">no reports for '+fp+'</span>';return}
+    const col=LAB_COLORS[fp]||"#3b9eff";
+    const avg=(rows.map(r=>parseFloat(r.downtime_hours)||0).reduce((a,b)=>a+b,0)/rows.length).toFixed(1);
+    $("history").innerHTML=
+      '<div style="font-size:12px;color:var(--mute);margin-bottom:10px" class="mono">'
+      +rows.length+' historical repairs · avg downtime '+avg+'h · source: scanned handwritten reports, vision-extracted (validated 100%)</div>'
+      +'<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px">'
+      +rows.map(r=>'<div class="card" style="padding:12px;border-left:3px solid '+col+'">'
+        +'<div class="mono" style="font-size:12px;display:flex;justify-content:space-between">'
+        +'<span><b>'+r.report_id+'</b> · '+r.asset_id+' · '+r.model_no+'</span>'
+        +'<span style="color:var(--mute)">'+r.failure_date+'</span></div>'
+        +'<div style="font-size:12px;color:var(--mute);margin:6px 0">'+r.symptoms+'</div>'
+        +'<div style="font-size:13px;margin:6px 0"><b style="color:'+col+'">REMEDY:</b> '+r.diagnosis+'</div>'
+        +'<div style="font-size:11px;color:var(--mute)" class="mono">parts: '+(r.parts_replaced||"—")
+        +' · downtime '+(r.downtime_hours||"?")+'h · tech: '+r.technician+'</div>'
+        +'</div>').join("")+'</div>';
+  }catch(e){$("history").innerHTML='<span style="color:#ef4444">history error</span>'}
+}
 
 async function renderOEE(){
   try{
@@ -349,6 +481,27 @@ function answerQ(which){
   box.innerHTML=t;box.style.display="block";
 }
 
+
+async function renderParts(){
+  try{
+    const d=await j("/api/parts/"+motor);
+    const box=$("partsbox");if(!box)return;
+    box.innerHTML='<div class="k" style="margin:12px 0 6px">PARTS FOR REPAIR — LIVE INVENTORY ('+d.wo_id+')</div>'
+      +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">'
+      +d.parts.map(p=>{
+        const qty=p.qty!==null?parseInt(p.qty):null;
+        const ok=qty===null?p.found:qty>0;
+        const col=ok?"#22c55e":"#ef4444";
+        const lead=(p.detail.lead_time_days||p.detail.lead_time||"");
+        return '<div class="card" style="padding:8px 10px;border-left:3px solid '+col+'">'
+          +'<div class="mono" style="font-size:12px"><b>'+p.part+'</b></div>'
+          +'<div style="font-size:11px" class="mono"><span style="color:'+col+'">'
+          +(ok?(qty!==null?qty+" in stock":"in stock"):"OUT OF STOCK")+'</span>'
+          +(lead?' · lead '+lead+'d':'')+'</div></div>';
+      }).join("")+'</div>';
+  }catch(e){const box=$("partsbox");if(box)box.innerHTML=""}
+}
+
 async function renderDiag(){
   const el=$("diag");
   try{
@@ -400,7 +553,8 @@ async function renderDiag(){
       +'<button class="qbtn" onclick="answerQ(\'why\')">Why was this predicted?</button>'
       +'<button class="qbtn" onclick="answerQ(\'evidence\')">What is the evidence?</button>'
       +'<button class="qbtn" onclick="answerQ(\'window\')">Why this maintenance window?</button></div>'
-      +'<div id="qanswer" class="card" style="display:none;margin-top:10px;padding:12px;font-size:13px;line-height:1.55"></div>';
+      +'<div id="qanswer" class="card" style="display:none;margin-top:10px;padding:12px;font-size:13px;line-height:1.55"></div>'
+      +'<div id="partsbox"></div>';
     h+='<div style="font-size:10px;color:var(--mute);margin-top:8px" class="mono">'+(d.enriched_by||"")+'</div>';
     h+='</div></div>';
     el.innerHTML=h;

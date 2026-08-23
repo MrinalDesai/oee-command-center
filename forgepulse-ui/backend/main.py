@@ -260,6 +260,64 @@ def get_reports(asset_id: str):
             for r in rows]
 
 
+@app.get("/api/parts/{asset_id}")
+def api_parts(asset_id: str):
+    wo = q("""
+        SELECT wo_id, suggested_parts FROM OEE_DB.ANALYTICS.WORK_ORDERS_GENERATED
+        WHERE asset_id=%s AND status='OPEN' ORDER BY wo_id DESC LIMIT 1""",
+        (asset_id,))
+    if not wo or not wo[0]["SUGGESTED_PARTS"]:
+        raise HTTPException(404, "no open work order / parts")
+    parts = [p.strip() for p in wo[0]["SUGGESTED_PARTS"].split(",") if p.strip()]
+    placeholders = ",".join(["%s"] * len(parts))
+    inv = []
+    for col in ("PART_NO", "PART_ID"):
+        try:
+            inv = q(f"SELECT * FROM OEE_DB.ERP.SPARE_PARTS_INVENTORY "
+                    f"WHERE {col} IN ({placeholders})", tuple(parts))
+            if inv:
+                break
+        except Exception:
+            continue
+    by_key = {}
+    for r in inv:
+        key = r.get("PART_NO") or r.get("PART_ID")
+        by_key[str(key)] = {k.lower(): ("" if v is None else str(v))
+                            for k, v in r.items()}
+    out = []
+    for p in parts:
+        row = by_key.get(p, {})
+        qty = None
+        for cand in ("qty_on_hand", "stock_qty", "quantity", "qty"):
+            if cand in row:
+                qty = row[cand]
+                break
+        out.append({"part": p, "found": bool(row), "qty": qty, "detail": row})
+    return {"wo_id": wo[0]["WO_ID"], "parts": out}
+
+
+@app.get("/api/history/{pattern}")
+def api_history(pattern: str):
+    rows = q("""
+        SELECT report_id, asset_id, model_no, failure_date, symptoms,
+               diagnosis, parts_replaced, downtime_hours, technician
+        FROM OEE_DB.ANALYTICS.EXTRACTED_REPORTS
+        WHERE fault_pattern_id = %s ORDER BY report_id""", (pattern,))
+    return [{k.lower(): ("" if v is None else str(v)) for k, v in r.items()}
+            for r in rows]
+
+
+@app.get("/api/lab/{pattern}")
+def api_lab(pattern: str, seed: int = None):
+    if pattern not in ("FP-01", "FP-02", "FP-03", "FP-04"):
+        raise HTTPException(400, "pattern must be FP-01..FP-04")
+    import lab
+    try:
+        return lab.run_lab(pattern, seed)
+    except Exception as e:
+        raise HTTPException(500, f"lab error: {e}")
+
+
 @app.get("/api/diagnosis/{asset_id}")
 def get_diagnosis(asset_id: str):
     rows = q("""

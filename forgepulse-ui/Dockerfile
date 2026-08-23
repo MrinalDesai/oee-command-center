@@ -1,4 +1,4 @@
-# ForgePulse console — single container for SPCS
+# ForgePulse console ? single container for SPCS
 FROM python:3.12-slim
 WORKDIR /app
 COPY backend/requirements.txt .

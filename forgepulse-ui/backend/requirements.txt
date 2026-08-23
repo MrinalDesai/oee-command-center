@@ -2,3 +2,6 @@ fastapi
 uvicorn
 pandas
 snowflake-connector-python
+xgboost
+numpy
+scikit-learn
