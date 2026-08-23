@@ -25,7 +25,34 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"],
                    allow_methods=["*"], allow_headers=["*"])
 
 # ── load once at startup ────────────────────────────────────────────────────
-telemetry = pd.read_csv(DATA / "raw_telemetry.csv", parse_dates=["ts"])
+def _synth_telemetry():
+    """Deterministic in-memory telemetry so the mock runs from a clean clone
+    (no data/ needed). 12 assets x 4 sensors x 6h at 5-min cadence."""
+    import numpy as np
+    rng = np.random.default_rng(42)
+    rows = []
+    t0 = pd.Timestamp("2026-08-01")
+    bases = {"VIBRATION_RMS": 2.6, "BEARING_TEMP": 66.0, "RPM": 1450.0,
+             "CURRENT_A": 38.0}
+    for a in range(1, 13):
+        aid = f"AST-{a:03d}"
+        fault = aid == "AST-007"
+        for s_i, (sensor, base) in enumerate(bases.items()):
+            for i in range(72):
+                v = base * (1 + 0.02 * np.sin(i / 12)) \
+                    + rng.normal(0, base * 0.03)
+                if fault and sensor in ("VIBRATION_RMS", "BEARING_TEMP"):
+                    v += base * 1.5 * (i / 72)
+                rows.append({"asset_id": aid, "sensor_type": sensor,
+                             "ts": t0 + pd.Timedelta(minutes=5 * i),
+                             "value": v, "quality_flag": "GOOD"})
+    return pd.DataFrame(rows)
+
+
+try:
+    telemetry = pd.read_csv(DATA / "raw_telemetry.csv", parse_dates=["ts"])
+except Exception:
+    telemetry = _synth_telemetry()
 assets = pd.read_csv(DATA / "asset_master.csv")
 wos = pd.read_csv(DATA / "work_order_history.csv", parse_dates=["opened_ts", "closed_ts"])
 schedule = pd.read_csv(DATA / "production_schedule.csv", parse_dates=["shift_date"])

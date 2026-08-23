@@ -1,6 +1,6 @@
 # ForgePulse — Predictive Maintenance & OEE Command Center
 
-**Snowflake CoCo CLI Hackathon 2026 (GCC Edition) — Track 3: AI-Native Application**
+**Snowflake CoCo CLI Hackathon 2026 — Predictive Maintenance and OEE Command Center**
 
 A factory's machines stream sensor data into Snowflake. ForgePulse watches
 that stream autonomously: it detects developing faults days before failure,
