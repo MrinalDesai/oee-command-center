@@ -4,3 +4,4 @@ reports/
 scripts/env.ps1
 data/
 docs/demo-script.md
+__pycache__/
