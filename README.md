@@ -1,15 +1,15 @@
-# ForgePulse — Predictive Maintenance & OEE Command Center
+﻿# ForgePulse â€” Predictive Maintenance & OEE Command Center
 
-**Snowflake CoCo CLI Hackathon 2026 — Predictive Maintenance and OEE Command Center**
+**Snowflake CoCo CLI Hackathon 2026 â€” Predictive Maintenance and OEE Command Center**
 
 A factory's machines stream sensor data into Snowflake. ForgePulse watches
 that stream autonomously: it detects developing faults days before failure,
-investigates the root cause against the plant's own repair history —
-including scanned handwritten reports — creates the work order with parts
+investigates the root cause against the plant's own repair history â€”
+including scanned handwritten reports â€” creates the work order with parts
 and a production-aware schedule, and shows a supervisor everything on a
 live deployed console, with the projected OEE impact of acting early.
 
-**Deployed console:** `<DEPLOYED_URL>` (Snowflake login required; served by
+**Deployed console:** `https://etntyrb-dmxgsfn-eyb14592.snowflakecomputing.app` (Snowflake login required; served by
 Snowpark Container Services from inside the submission account)
 
 **Demo video:** `<VIDEO_URL>`
@@ -34,40 +34,40 @@ Every layer of ForgePulse follows this split:
 
 ## What happens, end to end
 
-1. **Stream** — a Kafka producer emits 4 sensors × 12 assets every 5
+1. **Stream** â€” a Kafka producer emits 4 sensors Ã— 12 assets every 5
    seconds; a consumer lands batches in `OT.RAW_TELEMETRY`. A Snowflake
    **stream** marks the new rows.
-2. **Detect (autonomous)** — a serverless **task** fires every minute, but
+2. **Detect (autonomous)** â€” a serverless **task** fires every minute, but
    only spends compute when the stream has data. The detection **procedure**
    computes engineered features (z-scores against each asset's own 28-day
-   baseline, slopes, variance collapse, vibration→temperature lag
+   baseline, slopes, variance collapse, vibrationâ†’temperature lag
    correlation) and opens an `ANOMALY_EVENTS` row with a fault-pattern ID.
-   Idempotency: one open event per asset+mode — an ACTIONED event blocks
+   Idempotency: one open event per asset+mode â€” an ACTIONED event blocks
    re-alerting (a rule added after the autonomous DAG itself surfaced the
    duplicate-alert bug; see `tests/test_idempotency.py`).
-3. **Diagnose (autonomous)** — the next task in the DAG assembles the
+3. **Diagnose (autonomous)** â€” the next task in the DAG assembles the
    evidence dossier (features that fired, asset context, matching fleet
    work-order history) and writes a finding. A local LLM worker turns the
-   dossier into a structured narrative: Observed → Probable cause →
-   Supporting history → Urgency. Strict grounding: every number in the
+   dossier into a structured narrative: Observed â†’ Probable cause â†’
+   Supporting history â†’ Urgency. Strict grounding: every number in the
    text traces to a table row.
-4. **Enrich (explainability)** — a worker computes the same features the
+4. **Enrich (explainability)** â€” a worker computes the same features the
    classifier was trained on, runs the **Model Registry** classifier for
    pattern probability, extracts SHAP top factors, embeds the symptoms and
    retrieves the three most similar past repairs from the scanned-report
-   corpus by **VECTOR cosine similarity — the search runs inside
+   corpus by **VECTOR cosine similarity â€” the search runs inside
    Snowflake**.
-5. **Act (autonomous)** — tier rules create the work order: parts checked
+5. **Act (autonomous)** â€” tier rules create the work order: parts checked
    against `SPARE_PARTS_INVENTORY`, the repair scheduled into the lowest-
    load window in `PRODUCTION_SCHEDULE`, notification logged. Sensor
    faults (FP-03) never dispatch parts.
-6. **Show** — the deployed console renders it all: live waveforms whose
+6. **Show** â€” the deployed console renders it all: live waveforms whose
    display envelope is driven by real values against real baselines, the
    plant floor, the **AI Diagnosis panel** (verdict, confidence,
    top factors, similar past repairs with remedies and downtimes, and
    three evidence-backed questions a supervisor can click), and the
    **OEE bridge**: average unplanned downtime for this failure mode from
-   history vs the planned 4-hour stop → hours avoided → availability and
+   history vs the planned 4-hour stop â†’ hours avoided â†’ availability and
    OEE deltas per line.
 
 ## The document layer
@@ -81,43 +81,43 @@ are read by a local vision model and validated field-by-field:
 in plain SQL. Fleet learning made visible: a new fault on one machine
 cites its siblings' repair paperwork.
 
-## The classifier — an honest MLOps story
+## The classifier â€” an honest MLOps story
 
 The fault classifier (XGBoost, 5 classes, registered in the **Model
 Registry**) initially misfired in serving: 99% confident of belt slip on
-a textbook bearing fault. Eight documented iterations followed — feature
+a textbook bearing fault. Eight documented iterations followed â€” feature
 train/serve skew, RPM regime mixture from production-schedule speed
 changes, distribution shift from saturated faults the training sim never
-contained, severity miscalibration — each diagnosed with evidence
+contained, severity miscalibration â€” each diagnosed with evidence
 (per-class feature means vs live values) and fixed at the root. Final
 state: serving features computed with the exact training formulas; RPM
-features excluded (documented data-regime limitation — FP-04 detection
+features excluded (documented data-regime limitation â€” FP-04 detection
 remains rule-layer); the model now agrees with the rule layer at 98.9%
 confidence, and the rules were the safety floor the whole time. The full
 arc is in the session receipts.
 
 ## Snowflake services used
 
-Warehouses · Stages + PUT/COPY · Streams · Serverless Tasks (chained DAG)
-· Stored Procedures · VECTOR datatype + vector similarity functions ·
-Resource Monitors · Snowpark (Session + snowflake-ml) · Model Registry ·
-Image Repository · Compute Pools · Snowpark Container Services (public
-endpoint) · Semantic Views · Cortex Agents (DDL) · Notebooks (managed
-Python) · CoCo CLI (deployment agent + custom Agent Skills)
+Warehouses Â· Stages + PUT/COPY Â· Streams Â· Serverless Tasks (chained DAG)
+Â· Stored Procedures Â· VECTOR datatype + vector similarity functions Â·
+Resource Monitors Â· Snowpark (Session + snowflake-ml) Â· Model Registry Â·
+Image Repository Â· Compute Pools Â· Snowpark Container Services (public
+endpoint) Â· Semantic Views Â· Cortex Agents (DDL) Â· Notebooks (managed
+Python) Â· CoCo CLI (deployment agent + custom Agent Skills)
 
-## Cortex on trial accounts — the gate, documented
+## Cortex on trial accounts â€” the gate, documented
 
 `SNOWFLAKE.CORTEX.COMPLETE`, `EMBED_TEXT_768`, Cortex Search, Document AI
 runtime, and `DATA_AGENT_RUN` return *"not available for trial accounts"*
-on every account class this hackathon provides — verified on four
+on every account class this hackathon provides â€” verified on four
 accounts including two created through dedicated hackathon links, with
 query IDs on the support ticket. The model-role grant path
 (`CORTEX-MODEL-ROLE-ALL`) was also tested: the gate sits above it.
 
 ForgePulse therefore ships **Cortex-native definitions with local
-adapters at runtime**: COMPLETE → local mistral (narratives), EMBED →
+adapters at runtime**: COMPLETE â†’ local mistral (narratives), EMBED â†’
 bge-m3 into Snowflake VECTOR columns (retrieval still runs in Snowflake),
-Document AI → local qwen2.5-vl (validated 100%). Every adapter output is
+Document AI â†’ local qwen2.5-vl (validated 100%). Every adapter output is
 tagged `local | cortex pending access`, and the semantic view + agent
 exist as real objects (`sql/07_semantic_agent.sql`) so the day the gate
 lifts, the swap is an env change, not a rebuild.
@@ -125,9 +125,9 @@ lifts, the swap is an env change, not a rebuild.
 ## CoCo CLI as the deployment agent
 
 The entire system was deployed to this account **by CoCo in agentic
-sessions** — schema, 1.24M-row load with verified counts, streams, procs,
+sessions** â€” schema, 1.24M-row load with verified counts, streams, procs,
 task DAG, fault catalog, SPCS service. Receipts (prompts, approvals,
-incidents, self-corrections — including CoCo detecting its own over-firing
+incidents, self-corrections â€” including CoCo detecting its own over-firing
 delete against a known-good count and recovering by clean reload) are in
 `docs/coco-sessions/`. Three custom **Agent Skills**
 (`failure-prediction`, `rca-investigation`, `work-order-dispatch`) let
@@ -137,7 +137,7 @@ live-verified in the receipts.
 ## Repository map
 
 ```
-sql/            01_schema … 07_semantic_agent — the account, reproducible
+sql/            01_schema â€¦ 07_semantic_agent â€” the account, reproducible
 src/            generators, kafka pipe, workers, extraction, embedding,
                 training, enrichment
 forgepulse-ui/  FastAPI backend (Snowflake-backed + mock) + console +
@@ -159,9 +159,10 @@ docs/           BRD, redeploy runbook, SPCS runbook, session receipts
 pytest                        # 18 tests
 ```
 
-Full account redeploy from empty: `docs/redeploy.md` — rehearsed three
+Full account redeploy from empty: `docs/redeploy.md` â€” rehearsed three
 times, roughly one hour via a single CoCo prompt.
 
 ---
 
 *Built solo by Mrinal Desai for the Snowflake CoCo CLI Hackathon 2026.*
+
