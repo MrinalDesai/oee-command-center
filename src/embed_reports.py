@@ -1,10 +1,16 @@
 """
 embed_reports.py — Semantic retrieval layer over the repair-report corpus.
 
-Production path: Cortex Search (gated on trials). Local adapter: bge-m3
-embeddings via Ollama -> Snowflake VECTOR(FLOAT, 1024) column -> native
-VECTOR_COSINE_SIMILARITY retrieval in plain SQL. The retrieval itself runs
-INSIDE Snowflake; only the embedding call is local.
+PRODUCTION PATH (preferred):
+    SNOWFLAKE.CORTEX.EMBED_TEXT_768('snowflake-arctic-embed-m', ...)
+    -> VECTOR(FLOAT, 768) -> native VECTOR_COSINE_SIMILARITY.
+    Runs entirely in-account via SQL; see sql/07_embed_reports.sql.
+
+LOCAL FALLBACK (this script):
+    bge-m3 embeddings via Ollama -> VECTOR(FLOAT, 1024) column -> native
+    VECTOR_COSINE_SIMILARITY retrieval in plain SQL. The retrieval itself
+    runs INSIDE Snowflake; only the embedding call is local. Use this path
+    when Cortex is unavailable (gated trial, network restrictions, etc.).
 
 Usage:
     python src/embed_reports.py                      # embed all + load
