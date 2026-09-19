@@ -56,7 +56,7 @@
 
 ## OEE Command Center â€” Predictive Maintenance on Snowflake
 
-**Snowflake CoCo CLI Hackathon 2026 Â· Track 3: Predictive Maintenance and OEE Command Center**
+**Snowflake CoCo CLI Hackathon 2026 Â· Predictive Maintenance and OEE Command Center**
 Version 1.1 Â· Owner: Mrinal Desai Â· Status: Approved for build
 Changelog: v1.1 adds ML pattern classifier (trained on simulated failure corpus),
 handwritten repair-report PDF corpus + OCR pipeline, days-to-threshold prediction,
@@ -345,6 +345,8 @@ Iceberg, Snowpipe Streaming sink), final video, **submit Aug 30**
 |Scope inflation (named pattern)|Gate system; G1 spine before G1.5 documents before G2 ML; nothing merges half-working|
 |Preview-feature gaps|Day-1 verified: agents, search, analyst, streamlit, SPCS âœ“|
 |Organizer timeline/theme drift|Weekly dashboard check (public page already went stale once)|
+
+
 
 
 

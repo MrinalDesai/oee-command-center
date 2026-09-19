@@ -1,13 +1,20 @@
 """
-main.py — ForgePulse local mock backend.
+main_mock.py — ForgePulse local mock backend.
 
-Serves the same API contract the SPCS FastAPI backend will serve in G4
+Serves the same API contract the SPCS FastAPI backend serves
 (docs/spcs-deployment.md), but reads from the generator's CSVs in ../data
-instead of Snowflake. The frontend developed against this runs unchanged
-against the real backend later — only the data source swaps.
+instead of Snowflake. The console developed against this runs unchanged
+against the real backend — only the data source swaps.
 
-Run:  uvicorn main:app --reload --port 8000   (from backend/, venv active)
-Deps: fastapi uvicorn pandas
+Clean-clone safe: every dataset has a deterministic synthetic fallback, so
+the module imports and the full API contract is exercisable with no data/
+directory present (the generator's CSVs are gitignored). Fallback data is
+shaped to match the real generator: 12 assets across 3 lines, AST-007
+degrading into a bearing fault, 35 days of history so the 31-to-3-day
+baseline window is populated.
+
+Run:  uvicorn main_mock:app --reload --port 8000   (from backend/, venv active)
+Deps: fastapi uvicorn pandas numpy
 """
 from __future__ import annotations
 
@@ -24,40 +31,148 @@ app = FastAPI(title="ForgePulse mock API")
 app.add_middleware(CORSMiddleware, allow_origins=["*"],
                    allow_methods=["*"], allow_headers=["*"])
 
-# ── load once at startup ────────────────────────────────────────────────────
-def _synth_telemetry():
-    """Deterministic in-memory telemetry so the mock runs from a clean clone
-    (no data/ needed). 12 assets x 4 sensors x 6h at 5-min cadence."""
+SENSORS = ["VIBRATION_RMS", "BEARING_TEMP", "RPM", "CURRENT_DRAW"]
+_BASES = {"VIBRATION_RMS": 3.1, "BEARING_TEMP": 68.0,
+          "RPM": 1450.0, "CURRENT_DRAW": 38.0}
+FAULT_ASSET = "AST-007"
+
+
+# ── synthetic fallbacks (deterministic; used only when data/ is absent) ──────
+def _synth_telemetry() -> pd.DataFrame:
+    """12 assets x 4 sensors x 35 days at hourly cadence.
+
+    35 days so the 31-to-3-day baseline window has rows. AST-007 ramps over
+    the final 5 days on vibration and bearing temperature, ending well above
+    its own baseline so health_score() drives it critical — the same event
+    the real pipeline detects.
+    """
     import numpy as np
     rng = np.random.default_rng(42)
-    rows = []
+    hours = 35 * 24
     t0 = pd.Timestamp("2026-08-01")
-    bases = {"VIBRATION_RMS": 2.6, "BEARING_TEMP": 66.0, "RPM": 1450.0,
-             "CURRENT_A": 38.0}
+    rows = []
     for a in range(1, 13):
         aid = f"AST-{a:03d}"
-        fault = aid == "AST-007"
-        for s_i, (sensor, base) in enumerate(bases.items()):
-            for i in range(72):
-                v = base * (1 + 0.02 * np.sin(i / 12)) \
-                    + rng.normal(0, base * 0.03)
-                if fault and sensor in ("VIBRATION_RMS", "BEARING_TEMP"):
-                    v += base * 1.5 * (i / 72)
+        faulty = aid == FAULT_ASSET
+        for sensor in SENSORS:
+            base = _BASES[sensor]
+            for i in range(hours):
+                v = base * (1 + 0.02 * np.sin(i / 24)) + rng.normal(0, base * 0.03)
+                if faulty and sensor in ("VIBRATION_RMS", "BEARING_TEMP"):
+                    ramp_start = hours - 5 * 24
+                    if i >= ramp_start:
+                        frac = (i - ramp_start) / (5 * 24)
+                        v *= 1.0 + 2.6 * frac
                 rows.append({"asset_id": aid, "sensor_type": sensor,
-                             "ts": t0 + pd.Timedelta(minutes=5 * i),
-                             "value": v, "quality_flag": "GOOD"})
+                             "ts": t0 + pd.Timedelta(hours=i),
+                             "value": round(float(v), 3),
+                             "quality_flag": "GOOD"})
     return pd.DataFrame(rows)
 
 
+def _synth_assets() -> pd.DataFrame:
+    names = ["Main Drive Motor", "Conveyor Gearbox", "Hydraulic Pump",
+             "Air Compressor"]
+    types = ["MOTOR", "GEARBOX", "PUMP", "COMPRESSOR"]
+    rows = []
+    for a in range(1, 13):
+        line = f"L{(a - 1) // 4 + 1}"
+        k = (a - 1) % 4
+        rows.append({
+            "asset_id": f"AST-{a:03d}",
+            "asset_name": f"{line}{names[k]}",
+            "asset_type": types[k],
+            "line_id": line,
+            "model_no": f"MDL-{1000 + a}",
+            "install_date": "2019-03-12",
+            "criticality": "HIGH" if a % 3 == 1 or a == 7 else "MEDIUM",
+        })
+    return pd.DataFrame(rows)
+
+
+def _synth_wos(now: pd.Timestamp) -> pd.DataFrame:
+    """A small fleet work-order history, including the two bearing jobs the
+    RCA layer cites, so /api/workorders and the history panel have content."""
+    seed = [
+        ("WO-24101", "AST-003", "BEARING_WEAR", 9.5,
+         "Comp tripped on high vib alarm. 6312 brg cage broken, rollers "
+         "pitted. Replaced DE+NDE brgs, regreased. Suspect grease "
+         "contamination - PM interval should be reduced.",
+         "BRG-6312-2RS x2, GRS-EP2 grease", 74),
+        ("WO-24290", "AST-009", "BEARING_WEAR", 12.0,
+         "End of bearing life, ~14 months duty. Monitoring gap - no rounds "
+         "logged for 6 weeks. Replaced NDE bearing, aligned to 0.03mm.",
+         "BRG-6316-C3 x2", 45),
+        ("WO-24312", "AST-002", "COOLING_DEGRADATION", 4.0,
+         "Cooler fins fouled, dP across cooler high. Cleaned, restored "
+         "delta-T to spec.", "FLT-AIR-STD", 30),
+        ("WO-24355", "AST-008", "SENSOR_FAULT", 1.0,
+         "Vibration transmitter mount stud failed - fatigue. Signal frozen. "
+         "Replaced stud and re-torqued. No machine fault found.",
+         "TX-VIB-100mV", 18),
+        ("WO-24390", "AST-011", "BELT_SLIP_RPM", 3.0,
+         "Drive belt glazed, speed hunting under load. Replaced belt set, "
+         "re-tensioned.", "BLT-SPZ-1400 x3", 9),
+    ]
+    rows = []
+    for wo_id, aid, mode, hrs, notes, parts, days_ago in seed:
+        opened = now - pd.Timedelta(days=days_ago)
+        rows.append({
+            "wo_id": wo_id, "asset_id": aid, "wo_type": "CORRECTIVE",
+            "opened_ts": opened,
+            "closed_ts": opened + pd.Timedelta(hours=hrs),
+            "failure_mode": mode, "technician_notes": notes,
+            "parts_used": parts, "downtime_hours": hrs,
+        })
+    return pd.DataFrame(rows)
+
+
+def _synth_schedule(now: pd.Timestamp) -> pd.DataFrame:
+    """30 days x 3 lines x 2 shifts, ending at NOW, so the OEE endpoint's
+    trailing-7-day window is populated."""
+    import numpy as np
+    rng = np.random.default_rng(7)
+    rows = []
+    for d in range(30, -1, -1):
+        day = (now - pd.Timedelta(days=d)).normalize()
+        for line in ("L1", "L2", "L3"):
+            for shift in (1, 2):
+                planned = 960
+                actual = int(planned * rng.uniform(0.90, 0.99))
+                good = int(actual * rng.uniform(0.975, 0.998))
+                rows.append({
+                    "line_id": line, "shift_date": day, "shift_no": shift,
+                    "planned_minutes": 480, "planned_units": planned,
+                    "actual_units": actual, "good_units": good,
+                })
+    return pd.DataFrame(rows)
+
+
+# ── load once at startup (CSV if present, synthetic otherwise) ──────────────
 try:
     telemetry = pd.read_csv(DATA / "raw_telemetry.csv", parse_dates=["ts"])
 except Exception:
     telemetry = _synth_telemetry()
-assets = pd.read_csv(DATA / "asset_master.csv")
-wos = pd.read_csv(DATA / "work_order_history.csv", parse_dates=["opened_ts", "closed_ts"])
-schedule = pd.read_csv(DATA / "production_schedule.csv", parse_dates=["shift_date"])
 
 NOW = telemetry.ts.max()
+
+try:
+    assets = pd.read_csv(DATA / "asset_master.csv")
+except Exception:
+    assets = _synth_assets()
+
+try:
+    wos = pd.read_csv(DATA / "work_order_history.csv",
+                      parse_dates=["opened_ts", "closed_ts"])
+except Exception:
+    wos = _synth_wos(NOW)
+
+try:
+    schedule = pd.read_csv(DATA / "production_schedule.csv",
+                           parse_dates=["shift_date"])
+except Exception:
+    schedule = _synth_schedule(NOW)
+
 BASELINE_WINDOW = (NOW - timedelta(days=31), NOW - timedelta(days=3))
 
 vib = telemetry[telemetry.sensor_type == "VIBRATION_RMS"]
@@ -175,21 +290,21 @@ def get_workorders() -> list[dict]:
 # ── live feed (Sentinel-style monitor) ──────────────────────────────────────
 # Synthesizes a rolling live window per asset/sensor, mirroring the Kafka
 # producer's physics (baseline noise; AST-007 rides its ramp with bursts).
-# In G4 this endpoint reads the RAW_TELEMETRY tail instead — same shape.
+# The deployed backend reads the RAW_TELEMETRY tail instead — same shape.
 import math
 import random
 import time as _time
 
-_BASE = {r.asset_id: dict(VIBRATION_RMS=None, BEARING_TEMP=None, RPM=None,
-                          CURRENT_DRAW=None) for _, r in assets.iterrows()}
-for _sensor in ["VIBRATION_RMS", "BEARING_TEMP", "RPM", "CURRENT_DRAW"]:
+_BASE = {r.asset_id: {s: None for s in SENSORS} for _, r in assets.iterrows()}
+for _sensor in SENSORS:
     s = telemetry[telemetry.sensor_type == _sensor]
     med = (s[(s.ts >= BASELINE_WINDOW[0]) & (s.ts <= BASELINE_WINDOW[1])]
            .groupby("asset_id").value.median())
     cur = s[s.ts > NOW - timedelta(hours=2)].groupby("asset_id").value.mean()
     for aid in _BASE:
-        _BASE[aid][_sensor] = {"base": float(med.get(aid, 0)),
-                               "now": float(cur.get(aid, med.get(aid, 0)))}
+        fallback = float(med.get(aid, _BASES[_sensor]))
+        _BASE[aid][_sensor] = {"base": fallback,
+                               "now": float(cur.get(aid, fallback))}
 
 NOISE = {"VIBRATION_RMS": 0.10, "BEARING_TEMP": 0.012,
          "RPM": 0.004, "CURRENT_DRAW": 0.03}
@@ -235,10 +350,11 @@ def get_live(asset_id: str, sensor: str = "VIBRATION_RMS",
     }
 
 
-# ── serve the SentinelDesk-style console ────────────────────────────────────
+# ── serve the console ───────────────────────────────────────────────────────
 from fastapi.responses import FileResponse
 
 _WEB = Path(__file__).resolve().parent.parent / "web"
+
 
 @app.get("/")
 def console():
