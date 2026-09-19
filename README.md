@@ -185,3 +185,5 @@ times, roughly one hour via a single CoCo prompt, or via
 
 *Built solo by Mrinal Desai for the Snowflake CoCo CLI Hackathon 2026.*
 
+
+Execution evidence with Snowflake query IDs: [`docs/cortex-receipts.md`](docs/cortex-receipts.md).
