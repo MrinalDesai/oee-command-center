@@ -1,7 +1,7 @@
-﻿> ## Implementation status (read first)
-> This BRD describes the **target production architecture**, written
+> ## Implementation status (read first)
+> This BRD describes the \*\*target production architecture\*\*, written
 > Cortex-native. On the hackathon-provisioned trial account, Cortex
-> inference (COMPLETE, EMBED/Search, Document AI runtime, DATA_AGENT_RUN)
+> inference (COMPLETE, EMBED/Search, Document AI runtime, DATA\_AGENT\_RUN)
 > is entitlement-blocked - verified and ticketed. The delivered runtime
 > therefore uses documented local adapters behind the same interfaces:
 >
@@ -15,6 +15,7 @@
 >
 > Every adapter output is tagged `local | cortex pending access`.
 > Cortex-native definitions ship in `sql/`; the swap is configuration.
+
 # > ## Implementation status (read first)
 
 # > This BRD describes the \*\*target production architecture\*\*, written
@@ -151,16 +152,16 @@ baselines (median + MAD): vibration slope and acceleration, z-scores, variance,
 * FR-1.2 **Classifier:** XGBoost over feature windows â†’ P(BEARING\_WEAR),
 P(COOLING\_DEGRADATION), P(SENSOR\_FAULT), P(NORMAL). Trained in Snowflake Notebook
 on the simulated corpus; logged to **Model Registry** as
-`FAILURE\_PATTERN\_CLASSIFIER v1`; invoked from the pipeline
+`FAILURE\\\_PATTERN\\\_CLASSIFIER v1`; invoked from the pipeline
 * FR-1.3 **Stuck-at rule retained under the model** (near-zero variance â‡’ SENSOR\_FAULT):
 rules own safety, model owns nuance â€” deterministic floor beneath probabilistic
 classification
 * FR-1.4 **Days-to-threshold projection:** degradation slope extrapolated to alarm
 threshold â‡’ estimated lead time, reported with the classification
 * FR-1.5 Autonomous: Kafka â†’ RAW\_TELEMETRY â†’ append-only Stream (**built and verified
-day 1**) â†’ serverless Task (`WHEN SYSTEM$STREAM\_HAS\_DATA`) â†’ detection proc
+day 1**) â†’ serverless Task (`WHEN SYSTEM$STREAM\\\_HAS\\\_DATA`) â†’ detection proc
 * FR-1.6 Severity = f(P(mode), lead time, asset criticality); rows to
-`ANALYTICS.ANOMALY\_EVENTS` (status NEW), idempotent
+`ANALYTICS.ANOMALY\\\_EVENTS` (status NEW), idempotent
 * FR-1.7 Every prediction decomposes to its features in evidence ("vib slope 0.4/day,
 temp lag 1 d, matches bearing profile 0.91") â€” no unexplained scores
 
@@ -171,7 +172,7 @@ reports via Cortex Search over OCR-extracted text**, asset MTBF for the mode,
 install/PM dates
 * FR-2.2 Cortex COMPLETE writes the finding: probable mode, confidence, lead time,
 evidence, recommended action
-* FR-2.3 **Evidence-backed:** `FINDINGS.evidence\_json` cites telemetry features, WO IDs,
+* FR-2.3 **Evidence-backed:** `FINDINGS.evidence\\\_json` cites telemetry features, WO IDs,
 and repair-report serial numbers; no uncited claims
 * FR-2.4 Decision branch: SENSOR\_FAULT routes to data-quality queue â€” never a
 maintenance dispatch
@@ -190,7 +191,7 @@ human-operable from UI. Autonomy is bounded and auditable by design.
 
 ### FR-4 Document Intelligence (pipeline, feeds FR-2)
 
-* FR-4.1 PDFs staged â†’ `AI\_PARSE\_DOCUMENT` extraction â†’ structured table
+* FR-4.1 PDFs staged â†’ `AI\\\_PARSE\\\_DOCUMENT` extraction â†’ structured table
 (report serial no, asset, failure ts, symptoms, diagnosis, parts) â†’ full text into
 **Cortex Search** service (native vector indexing â€” no external vector store)
 * FR-4.2 Pipeline built via `document-intelligence` / `ai-functions-pipeline-builder`
@@ -215,20 +216,20 @@ for actioned findings
 
 ```
                               â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ SNOWFLAKE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
- Kafka (live feed) â”€â”€â–º sink â”€â–º OT.RAW\_TELEMETRY â”€â–º Stream â”€â–º Task â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”               â”‚
- \[prod: OpenFlow /            (upgrade: Snowpipe Streaming)                 â–¼               â”‚
+ Kafka (live feed) â”€â”€â–º sink â”€â–º OT.RAW\\\_TELEMETRY â”€â–º Stream â”€â–º Task â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”               â”‚
+ \\\[prod: OpenFlow /            (upgrade: Snowpipe Streaming)                 â–¼               â”‚
   Kafka connector]                                     feature eng (Dynamic Tables) â”€â–º      â”‚
- ERP CSVs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â–º Stage/COPY â”€â–º ERP.\*             detection proc + Registry model      â”‚
- \[prod: SF Postgres]                                   + slope projection (days-to-thresh)  â”‚
+ ERP CSVs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â–º Stage/COPY â”€â–º ERP.\\\*             detection proc + Registry model      â”‚
+ \\\[prod: SF Postgres]                                   + slope projection (days-to-thresh)  â”‚
                                                                     â”‚                       â”‚
- Scanned repair PDFs â”€â–º Stage â”€â–º AI\_PARSE\_DOCUMENT â”€â–º extracted     â–¼                       â”‚
-                                  table + Cortex      ANALYTICS.ANOMALY\_EVENTS              â”‚
+ Scanned repair PDFs â”€â–º Stage â”€â–º AI\\\_PARSE\\\_DOCUMENT â”€â–º extracted     â–¼                       â”‚
+                                  table + Cortex      ANALYTICS.ANOMALY\\\_EVENTS              â”‚
                                   Search index â—„â”€â”€â”                 â”‚                       â”‚
                                                   â”‚                 â–¼                       â”‚
                      Cortex Analyst (semantic view)â”´â”€ Cortex Agent (RCA) â”€â–º FINDINGS        â”‚
-                                                                    â”‚      (evidence\_json   â”‚
+                                                                    â”‚      (evidence\\\_json   â”‚
                                                                     â–¼       cites reports)  â”‚
-                                            WORK\_ORDERS\_GENERATED (autonomy tiers A/B/C)    â”‚
+                                            WORK\\\_ORDERS\\\_GENERATED (autonomy tiers A/B/C)    â”‚
                                                      + Alert/Notify                         â”‚
                                                                     â”‚                       â”‚
                                   Streamlit in Snowflake â—„â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜                       â”‚
@@ -344,7 +345,6 @@ Iceberg, Snowpipe Streaming sink), final video, **submit Aug 30**
 |Scope inflation (named pattern)|Gate system; G1 spine before G1.5 documents before G2 ML; nothing merges half-working|
 |Preview-feature gaps|Day-1 verified: agents, search, analyst, streamlit, SPCS âœ“|
 |Organizer timeline/theme drift|Weekly dashboard check (public page already went stale once)|
-
 
 
 
