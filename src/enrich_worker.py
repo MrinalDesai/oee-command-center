@@ -5,10 +5,16 @@ For each finding, this worker:
   1. computes the same engineered features detection uses (from live data)
   2. runs the fault classifier -> per-class CONFIDENCE
   3. extracts the top contributing factors (SHAP) -> WHY the model thinks so
-  4. embeds the symptoms (bge-m3) and retrieves the most similar past
+  4. embeds the symptoms (Cortex EMBED_TEXT_768) and retrieves the most similar past
      repair reports from REPORT_EMBEDDINGS (Snowflake VECTOR search)
   5. writes everything to OEE_DB.ANALYTICS.FINDING_ENRICHMENT
      for the console's Diagnosis panel.
+
+Retrieval is fully in-account: the query is embedded by
+SNOWFLAKE.CORTEX.EMBED_TEXT_768('snowflake-arctic-embed-m', ...) inside the
+similarity SQL, matching the 768-dim corpus built by sql/07_embed_reports.sql.
+The previous local bge-m3/Ollama path (1024-dim) is retained in embed() as a
+documented fallback for accounts where Cortex is gated.
 
 Prereq: python src/train_classifier.py  (saves data/fault_classifier.json)
 Run:    . .\\scripts\\env.ps1 ; python src\\enrich_worker.py        # once
@@ -124,6 +130,11 @@ def connect():
 
 
 def embed(text: str) -> list[float]:
+    """Fallback only: local bge-m3 (1024-dim) for Cortex-gated accounts.
+
+    Not used on the production path — retrieval embeds the query in SQL via
+    CORTEX.EMBED_TEXT_768 so it matches the 768-dim corpus.
+    """
     r = requests.post(f"{OLLAMA_URL}/api/embed",
                       json={"model": "bge-m3", "input": text}, timeout=120)
     r.raise_for_status()
@@ -141,7 +152,7 @@ def ensure_table(cur):
         top_factors VARCHAR(500),
         similar_reports VARCHAR(4000),
         enriched_by VARCHAR(80) DEFAULT
-          'xgboost registry-model + bge-m3 local | cortex pending access',
+          'xgboost registry-model + cortex EMBED_TEXT_768',
         enriched_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP())""")
 
 
@@ -170,18 +181,17 @@ def enrich_one(conn, model, classes, finding):
     except Exception:
         factors = []
 
-    # semantic history: similar past repairs
+    # semantic history: similar past repairs — query embedded in-account by Cortex
     cur2 = conn.cursor()
     qtext = f"{finding['RCA_SUMMARY'][:400]}"
-    vec = embed(qtext)
     cur2.execute(
         "SELECT r.report_id, r.fault_pattern_id, r.asset_id, "
         " ROUND(VECTOR_COSINE_SIMILARITY(e.embedding, "
-        "   CAST(PARSE_JSON(%s) AS VECTOR(FLOAT,1024))),3) score, "
+        "   SNOWFLAKE.CORTEX.EMBED_TEXT_768('snowflake-arctic-embed-m', %s)),3) score, "
         " r.diagnosis, r.parts_replaced, r.downtime_hours "
         "FROM OEE_DB.ANALYTICS.REPORT_EMBEDDINGS e "
         "JOIN OEE_DB.ANALYTICS.EXTRACTED_REPORTS r ON r.report_id=e.report_id "
-        "ORDER BY score DESC LIMIT 3", (json.dumps(vec),))
+        "ORDER BY score DESC LIMIT 3", (qtext,))
     sims = [{"report_id": r[0], "pattern": r[1], "asset": r[2], "score": float(r[3]),
              "remedy": (r[4] or "")[:180], "parts": (r[5] or "")[:80],
              "downtime_h": r[6]} for r in cur2.fetchall()]
@@ -211,7 +221,6 @@ def main():
     model = xgb.XGBClassifier()
     model.load_model("data/fault_classifier.json")
     classes = json.load(open("data/fault_classes.json"))
-    requests.get(f"{OLLAMA_URL}/api/tags", timeout=5).raise_for_status()
 
     conn = connect()
     cur = conn.cursor(snowflake.connector.DictCursor)

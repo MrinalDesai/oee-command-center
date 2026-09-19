@@ -1,0 +1,15 @@
+spec:
+  containers:
+    - name: console
+      image: /oee_db/containers/oee_repository/forgepulse-console:v3
+      env:
+        SNOWFLAKE_WAREHOUSE: OEE_WH
+        SNOWFLAKE_DATABASE: OEE_DB
+        SNOWFLAKE_SCHEMA: ANALYTICS
+      readinessProbe:
+        port: 8000
+        path: /health
+  endpoints:
+    - name: console
+      port: 8000
+      public: true
