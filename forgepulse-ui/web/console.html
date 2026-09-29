@@ -60,7 +60,7 @@
   .stat .k{font-size:10.5px;letter-spacing:.1em;color:var(--mute);text-transform:uppercase}
   .stat .v{font-size:22px;font-weight:700;margin-top:6px;font-family:var(--mono)}
   .spark{width:64px;height:26px}
-  .sect{font-size:11px;letter-spacing:.16em;color:var(--mute);text-transform:uppercase;margin:22px 0 10px;font-weight:600}
+  .sect{scroll-margin-top:80px;font-size:11px;letter-spacing:.16em;color:var(--mute);text-transform:uppercase;margin:22px 0 10px;font-weight:600}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
   .lineRow{display:flex;align-items:center;gap:12px;border:1px solid var(--line);border-radius:8px;
     padding:10px 14px;background:var(--panel2);margin-bottom:10px;flex-wrap:wrap}
@@ -110,7 +110,7 @@
   <div class="kv"><div class="k">System Status</div><div class="v on">ONLINE</div></div>
   <div class="kv"><div class="k">Last Update</div><div class="v mono" id="clock">—</div></div>
   <div class="kv"><div class="k">Uptime</div><div class="v mono" id="uptime">—</div></div>
-  <div class="right"><a href="#alertsect" class="bell" style="text-decoration:none;cursor:pointer">🔔 Alerts<span class="n" id="acount">0</span></a></div>
+  <div class="right"><span class="bell">🔔 Alerts<span class="n" id="acount">0</span></span></div>
 </div>
 <div class="layout">
   <aside class="side">
@@ -173,7 +173,7 @@
     </div>
     <div class="sect" id="pipesect">Fault Pipeline</div>
     <div class="card" id="pipes"></div>
-    <div id="alertsect"></div><div class="ticker" id="ticker"></div>
+    <div class="sect" id="alertsect">Active Alerts</div><div class="ticker" id="ticker"></div>
   </main>
 </div>
 <script>
@@ -600,6 +600,10 @@ boot();
 </script>
 </body>
 </html>
+
+
+
+
 
 
 
