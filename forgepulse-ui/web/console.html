@@ -343,7 +343,7 @@ async function runLab(p){
 let labAnim=null;
 function drawLab(d){
   if(labAnim)cancelAnimationFrame(labAnim);
-  const c=$("labwave"),x=c.getContext("2d"),W=c.width,H=c.height,mid=H/2;
+  const c=$("labwave"),x=c.getContext("2d"),W=c.width,H=c.height,mid=H/2;x.clearRect(0,0,W,H);
   const v=d.vib,n=v.length,base=d.baseline_vib;
   const dev=v.map(q=>q-base);
   const amp=Math.max(...dev.map(Math.abs))||1;
@@ -600,6 +600,7 @@ boot();
 </script>
 </body>
 </html>
+
 
 
 

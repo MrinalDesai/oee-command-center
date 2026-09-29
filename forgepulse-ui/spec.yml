@@ -1,7 +1,7 @@
 spec:
   containers:
     - name: console
-      image: /oee_db/containers/oee_repository/forgepulse-console:v8
+      image: /oee_db/containers/oee_repository/forgepulse-console:v9
       env:
         SNOWFLAKE_WAREHOUSE: OEE_WH
         SNOWFLAKE_DATABASE: OEE_DB
