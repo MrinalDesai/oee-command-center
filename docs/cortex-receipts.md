@@ -1,10 +1,10 @@
-# Cortex Execution Receipts — YRCKWDT-CNB10903
+# Cortex Execution Receipts — XSJWISO-MIB54927
 
 Evidence that `SNOWFLAKE.CORTEX.COMPLETE` and `SNOWFLAKE.CORTEX.EMBED_TEXT_768`
 execute successfully on the submission account, after the AI Data Cloud
 entitlement lifted the trial gate documented in the README.
 
-Account: **YRCKWDT-CNB10903** · AWS us-west-2 · Enterprise
+Account: **XSJWISO-MIB54927** · AWS us-west-2 · Enterprise
 Query IDs are verifiable in Snowsight → Monitoring → Query History.
 Timestamps are account-local (America/Los_Angeles, UTC-7).
 
@@ -17,8 +17,8 @@ every previous account class.
 
 | Function | Query ID | Status | Time | Rows |
 |---|---|---|---|---|
-| `CORTEX.COMPLETE('llama3.1-70b', …)` | `01c72312-010b-8457-0032-db570005a01a` | SUCCESS | 2026-09-17 11:58:23 | 1 |
-| `CORTEX.EMBED_TEXT_768('snowflake-arctic-embed-m', …)` | `01c72312-010b-7b0f-0032-db5700050db2` | SUCCESS | 2026-09-17 11:58:28 | 1 |
+| `CORTEX.COMPLETE('llama3.1-70b', …)` | `01c7546a-040b-a79a-0033-314f00073026` | SUCCESS | 2026-09-26 06:30:59 | 1 |
+| `CORTEX.EMBED_TEXT_768('snowflake-arctic-embed-m', …)` | `01c7546b-040b-ac8e-0033-314f00076fe6` | SUCCESS | 2026-09-26 06:31:12 | 1 |
 
 `COMPLETE` returned `OK`. `EMBED_TEXT_768` returned a 768-element float vector.
 
@@ -26,60 +26,58 @@ every previous account class.
 
 ## 2. RCA narrative generated in-procedure by CORTEX.COMPLETE
 
-`DIAGNOSE_FINDINGS()` was redeployed with the `[PENDING_NARRATIVE]` stub
-replaced by an inline `CORTEX.COMPLETE` call against the evidence dossier
-(`sql/04_diagnose.sql`).
+`DIAGNOSE_FINDINGS()` carries the `CORTEX.COMPLETE` call inline, against the
+evidence dossier assembled from detection features and fleet work-order
+history (`sql/04_diagnose.sql`).
 
 | Step | Query ID | Status | Time | Rows |
 |---|---|---|---|---|
-| `CREATE OR REPLACE PROCEDURE …DIAGNOSE_FINDINGS()` | `01c72bc8-010b-8901-0032-db57000940d6` | SUCCESS | 2026-09-19 01:08:24 | — |
-| `INSERT INTO …FINDINGS (… rca_summary …)` — narrative written | `01c72bc9-010b-8aae-0032-db5700093082` | SUCCESS | 2026-09-19 01:09:02 | 1 |
+| `CREATE OR REPLACE PROCEDURE …DIAGNOSE_FINDINGS()` | `01c76366-040b-b950-0033-314f0008d02e` | SUCCESS | 2026-09-28 22:26:38 | — |
+| `INSERT INTO …FINDINGS (… rca_summary …)` — narrative written | `01c7636c-040b-aee8-0033-314f000741ae` | SUCCESS | 2026-09-28 22:32:02 | 1 |
 
-Resulting narrative for AST-007 (finding 101) cites the live feature values and
-two real work orders from the plant's own history:
+Resulting narrative for AST-007, citing the live feature values and two real
+work orders from the plant's own history:
 
-> The probable failure mode is bearing degradation, as indicated by the high
-> vibration reading (vib_now: 10.64 mm/s) and increasing vibration slope
-> (vib_slope_per_day: 1.76 mm/s/day). The temperature reading (temp_now: 79.8°C)
-> and temperature slope (temp_slope_per_day: 1.992°C/day) also suggest an
-> abnormal condition. This failure mode is consistent with historical work
-> orders WO-24290 and WO-24101, which involved bearing failures on similar
-> assets. The prognosis is that the compressor is at high risk of imminent
-> failure, with a high likelihood of bearing seizure or other catastrophic
-> failure if not addressed promptly.
+> The probable failure mode is bearing failure due to excessive vibration, as
+> indicated by the high vibration reading (10.64 mm/s) and increasing vibration
+> slope (+1.76 mm/s/day). The temperature reading (79.8°C) and temperature
+> slope (+1.992°C/day) also suggest an abnormal operating condition. This
+> failure mode is consistent with historical work orders WO-24290 and WO-24101,
+> which involved bearing failures on similar assets. The prognosis is that the
+> compressor is likely to fail imminently, given the rapid increase in
+> vibration and temperature readings.
 
 ---
 
 ## 3. Report corpus embedded natively at 768 dimensions
 
-The twenty scanned repair reports were re-embedded from local bge-m3
-(`VECTOR(FLOAT,1024)`) to Cortex (`VECTOR(FLOAT,768)`) — `sql/07_embed_reports.sql`.
+The twenty scanned repair reports are embedded by Cortex into a
+`VECTOR(FLOAT,768)` column — `sql/07_embed_reports.sql`.
 
 | Step | Query ID | Status | Time | Rows |
 |---|---|---|---|---|
-| `CREATE OR REPLACE TABLE …REPORT_EMBEDDINGS (… VECTOR(FLOAT,768))` | `01c72bd0-010b-87e4-0032-db570009609a` | SUCCESS | 2026-09-19 01:16:32 | — |
-| `INSERT … SELECT CORTEX.EMBED_TEXT_768(…)` — **20 reports embedded** | `01c72bd1-010b-8971-0032-db570009209e` | SUCCESS | 2026-09-19 01:17:10 | **20** |
+| `CREATE OR REPLACE TABLE …REPORT_EMBEDDINGS (… VECTOR(FLOAT,768))` | `01c76370-040b-a07c-0033-314f0006b136` | SUCCESS | 2026-09-28 22:36:54 | — |
+| `INSERT … SELECT CORTEX.EMBED_TEXT_768(…)` — **20 reports embedded** | `01c76371-040b-9e4b-0033-314f0007123a` | SUCCESS | 2026-09-28 22:37:03 | **20** |
 
 ---
 
 ## 4. Semantic retrieval over the Cortex-embedded corpus
 
-`VECTOR_COSINE_SIMILARITY` against the 768-dim corpus, query embedded in-account
-by `EMBED_TEXT_768` — no local model in the path.
+`VECTOR_COSINE_SIMILARITY` against the 768-dim corpus, query embedded
+in-account by `EMBED_TEXT_768` — no local model in the path.
 
 | Step | Query ID | Status | Time | Rows |
 |---|---|---|---|---|
-| Similarity search, verification run | `01c72bd2-010b-8854-0032-db570008f0d2` | SUCCESS | 2026-09-19 01:18:25 | 3 |
-| Similarity search from `enrich_worker.py` | `01c72c09-010b-8901-0032-db570009436e` | SUCCESS | 2026-09-19 02:13:00 | 3 |
-| Console diagnosis panel retrieval | `01c72c62-010b-8971-0032-db570009243a` | SUCCESS | 2026-09-19 03:42:41 | 5 |
+| Similarity search, verification run | `01c76371-040b-ace9-0033-314f0007230e` | SUCCESS | 2026-09-28 22:37:17 | 3 |
+| Similarity search from `enrich_worker.py` | `01c76373-040b-9feb-0033-314f0005f28a` | SUCCESS | 2026-09-28 22:39:59 | 3 |
 
-Top matches for the AST-007 symptom text, all FP-01 bearing reports:
+Top matches for "bearing failure", all FP-01 bearing reports:
 
 | Report | Pattern | Asset | Score |
 |---|---|---|---|
-| RPT-4003 | FP-01 | AST-007 | 0.64 |
-| RPT-4002 | FP-01 | AST-009 | 0.61 |
-| RPT-4013 | FP-03 | AST-008 | 0.60 |
+| RPT-4002 | FP-01 | AST-009 | 0.581 |
+| RPT-4003 | FP-01 | AST-007 | 0.575 |
+| RPT-4001 | FP-01 | AST-003 | 0.554 |
 
 RPT-4003 is a prior bearing event on AST-007 itself — the asset the live
 pipeline has just flagged.
@@ -88,13 +86,13 @@ pipeline has just flagged.
 
 ## 5. Enrichment table populated
 
-| Step | Query ID | Status | Time | Rows |
-|---|---|---|---|---|
-| `CREATE TABLE IF NOT EXISTS …FINDING_ENRICHMENT` | `01c72c08-010b-87e4-0032-db570009635e` | SUCCESS | 2026-09-19 02:12:56 | — |
-| `UPDATE …FINDING_ENRICHMENT SET enriched_by = …` | `01c72c10-010b-8dd8-0032-db570009e2b2` | SUCCESS | 2026-09-19 02:20:56 | 1 |
+| Step | Query ID | Status | Time |
+|---|---|---|---|
+| `CREATE TABLE IF NOT EXISTS …FINDING_ENRICHMENT` | `01c76373-040b-9feb-0033-314f0005f286` | SUCCESS | 2026-09-28 22:39:52 |
 
-`enriched_by` now records `xgboost registry-model + cortex EMBED_TEXT_768`,
-replacing the adapter-era label.
+`enriched_by` records `xgboost registry-model + cortex EMBED_TEXT_768`.
+The registered classifier returns FP-01 at 99% for the AST-007 window, served
+natively via `FAULT_PATTERN_CLASSIFIER!PREDICT_PROBA`.
 
 ---
 
@@ -105,5 +103,11 @@ replacing the adapter-era label.
 | Cortex is entitled on the submission account | §1 — both gate functions SUCCESS |
 | RCA narratives generated in-procedure by COMPLETE | §2 — procedure + narrative row |
 | Corpus embedded by EMBED_TEXT_768 into VECTOR(FLOAT,768) | §3 — 20 rows embedded |
-| Retrieval runs end to end inside the account | §4 — three successful similarity queries |
+| Retrieval runs end to end inside the account | §4 — two successful similarity queries |
 | No local model in the serving path | §2–4 — every step is a Snowflake query ID |
+
+---
+
+*The pipeline was first brought up Cortex-native on the earlier build account
+YRCKWDT-CNB10903 (19 Sep 2026); this document records the submission account.
+Both run identical code from this repository.*

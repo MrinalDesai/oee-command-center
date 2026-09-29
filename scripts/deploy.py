@@ -38,7 +38,7 @@ def connect():
         account=os.environ["SNOWFLAKE_ACCOUNT"],
         user=os.environ["SNOWFLAKE_USER"],
         password=os.environ["SNOWFLAKE_PASSWORD"],
-        role="ACCOUNTADMIN",
+        role="ACCOUNTADMIN", database="OEE_DB", schema="ANALYTICS", warehouse="OEE_WH",
     )
     cur = con.cursor()
     acct, user = cur.execute(
@@ -56,7 +56,7 @@ def run_file(con, cur, path):
     print(f"\n=== {path} ===")
     with open(path, encoding="utf-8") as fh:
         sql = fh.read()
-    for stmt in con.execute_string(sql):
+    for stmt in con.execute_string(sql, remove_comments=False):
         head = " ".join(stmt.query.strip().split())[:90]
         try:
             row = stmt.fetchone()
@@ -129,3 +129,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
