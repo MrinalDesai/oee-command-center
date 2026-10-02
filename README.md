@@ -21,7 +21,7 @@ submission account)
 > `docs/redeploy.md` plus `sql/08_load.sql` bring an empty account to a running
 > console in about an hour. Happy to redeploy on request.
 
-**Demo video:** `<VIDEO_URL>`
+**Demo video:** `https://www.youtube.com/watch?v=BwjjUCThBgw`
 
 ![AI Diagnosis panel](docs/images/02-ai-diagnosis.png)
 
@@ -246,5 +246,6 @@ CoCo CLI is unavailable.
 ---
 
 *Built solo by Mrinal Prakash Desai for the Snowflake CoCo CLI Hackathon 2026.*
+
 
 
