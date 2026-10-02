@@ -11,7 +11,7 @@ from snowflake.ml.registry import Registry
 os.environ["PYTHONIOENCODING"] = "utf-8"
 
 # ── 1. Snowpark session ──────────────────────────────────────────────────────
-session = Session.builder.configs({"connection_name": "gcc_sub"}).create()
+session = Session.builder.configs({"connection_name": "gcc_oct"}).create()
 session.use_database("OEE_DB")
 session.use_schema("ANALYTICS")
 print("Connected:", session.get_current_database(), session.get_current_schema())

@@ -9,15 +9,14 @@ scanned handwritten reports — creates the work order with parts and a
 production-aware schedule, and shows a supervisor everything on a live deployed
 console, with the projected OEE impact of acting early.
 
-**Deployed console:** `https://eqhfgtb-xsjwiso-mib54927.snowflakecomputing.app`
+**Deployed console:** `https://eq3xntb-vqyueyo-cgb78487.snowflakecomputing.app`
 (Snowflake login required; served by Snowpark Container Services from inside the
 submission account)
 
-**Mirror (build account, live through ~17 Oct 2026):**
-`https://eqln3sb-yrckwdt-cnb10903.snowflakecomputing.app`
+**Mirror (build account, live through ~26 Oct 2026):**
+`https://eqhfgtb-xsjwiso-mib54927.snowflakecomputing.app`
 
-> Both links run on 30-day hackathon trial accounts; the primary expires
-> ~26 Oct 2026. First load takes 2–3 minutes while the SPCS compute pool
+> Both links run on 30-day hackathon trial accounts; the primary expires ~1 Nov 2026. First load takes 2–3 minutes while the SPCS compute pool
 > resumes from idle. The system is fully reproducible from this repo —
 > `docs/redeploy.md` plus `sql/08_load.sql` bring an empty account to a running
 > console in about an hour. Happy to redeploy on request.
@@ -247,3 +246,5 @@ CoCo CLI is unavailable.
 ---
 
 *Built solo by Mrinal Prakash Desai for the Snowflake CoCo CLI Hackathon 2026.*
+
+
