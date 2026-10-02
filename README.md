@@ -23,6 +23,36 @@ submission account)
 
 **Demo video:** `https://www.youtube.com/watch?v=BwjjUCThBgw`
 
+### Judge access to the live console
+
+Snowpark Container Services puts Snowflake authentication in front of every
+endpoint, so the console cannot be opened anonymously. A read-only account is
+provisioned on the submission account so the live system can be used rather than
+only watched.
+
+| | |
+|---|---|
+| Username | `hackathon_judge` |
+| Password | `ForgePulse2026!Judge` |
+
+Every panel works with this login — plant floor, AI Diagnosis, Anomaly Lab
+injections, Repair History, the OEE bridge and the fault pipeline. The backend
+queries Snowflake under the service identity, so the role governs endpoint
+access only.
+
+The same login works in Snowsight with `SELECT` on all three schemas, to check
+the claims below against the tables directly:
+
+```sql
+SELECT COUNT(*) FROM OEE_DB.OT.RAW_TELEMETRY;              -- 1,244,160
+SELECT * FROM OEE_DB.ANALYTICS.ANOMALY_EVENTS;             -- AST-007, FP-01, HIGH
+SELECT rca_summary FROM OEE_DB.ANALYTICS.FINDINGS;         -- Cortex COMPLETE narrative
+SELECT COUNT(*) FROM OEE_DB.ANALYTICS.REPORT_EMBEDDINGS;   -- 20 x VECTOR(FLOAT, 768)
+```
+
+These credentials are disposable: a 30-day hackathon trial account expiring
+around 1 November 2026, holding only synthetic factory telemetry.
+
 ![AI Diagnosis panel](docs/images/02-ai-diagnosis.png)
 
 ---
@@ -100,8 +130,8 @@ rather than a navigation.
 
 ## The Anomaly Lab — inject and detect
 
-A synthetic signal with the same physics as the training data, with one fault
-injected into a known segment. The registered classifier runs over 18-hour
+A controlled synthetic signature, generated with the same feature assumptions as
+the training pipeline, with one fault injected into a known segment. The registered classifier runs over 18-hour
 sliding windows; the ground-truth bracket is drawn underneath so the call can be
 checked against the truth rather than taken on trust.
 
