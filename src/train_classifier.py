@@ -87,7 +87,7 @@ def main() -> None:
         s = Session.builder.configs({
             "account": os.environ["SNOWFLAKE_ACCOUNT"],
             "user": os.environ["SNOWFLAKE_USER"],
-            "password": os.environ["SNOWFLAKE_PASSWORD"],
+            "private_key_file": os.path.expanduser("~/.snowflake/rsa_key.p8"),
             "warehouse": "OEE_WH", "database": "OEE_DB",
             "schema": "ANALYTICS"}).create()
         r = Registry(session=s, database_name="OEE_DB", schema_name="ANALYTICS")
@@ -110,3 +110,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

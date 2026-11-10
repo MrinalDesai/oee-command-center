@@ -164,3 +164,4 @@ print(f"Fault-flagged: {len(non_normal)}/{len(fleet)}    Within 7d threshold: {l
 print("=" * 105)
 
 session.close()
+

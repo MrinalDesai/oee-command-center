@@ -125,7 +125,7 @@ def compute_features(cur, asset):
 def connect():
     return snowflake.connector.connect(
         account=os.environ["SNOWFLAKE_ACCOUNT"], user=os.environ["SNOWFLAKE_USER"],
-        password=os.environ["SNOWFLAKE_PASSWORD"],
+        private_key_file=os.path.expanduser("~/.snowflake/rsa_key.p8"),
         warehouse="OEE_WH", database="OEE_DB", schema="ANALYTICS")
 
 
@@ -247,3 +247,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

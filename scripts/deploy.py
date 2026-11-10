@@ -37,7 +37,7 @@ def connect():
     con = sc.connect(
         account=os.environ["SNOWFLAKE_ACCOUNT"],
         user=os.environ["SNOWFLAKE_USER"],
-        password=os.environ["SNOWFLAKE_PASSWORD"],
+        private_key_file=os.path.expanduser("~/.snowflake/rsa_key.p8"),
         role="ACCOUNTADMIN", database="OEE_DB", schema="ANALYTICS", warehouse="OEE_WH",
     )
     cur = con.cursor()
@@ -129,5 +129,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
